@@ -4,8 +4,9 @@
 # tetris.py
 
 
-import  graphics5ab as gr
+import graphics5ab as gr
 import random
+import threading
 
 ############################################################
 # BLOCK CLASS
@@ -59,8 +60,17 @@ class Block(gr.Rectangle):
             Returns True if it can, and False otherwise
             HINT: use the can_move method on the Board object
         '''
-        #YOUR CODE HERE
-        pass
+        #### Ankush Burman Code ####
+        new_x = dx+self.x
+        new_y = dy+self.y
+
+        if board.can_move(new_x, new_y):
+            return True
+        else:
+            return False 
+
+        return False
+        #### Ankush Burman Code ####
     
     def move(self, dx, dy):
         ''' Parameters: dx - type: int
@@ -74,6 +84,11 @@ class Block(gr.Rectangle):
         self.y += dy
 
         gr.Rectangle.move(self, dx*Block.BLK_SIZE, dy*Block.BLK_SIZE)
+
+    #### Ankush Burman Code ####
+    def get_coords(self):
+        return (self.x, self.y)
+    #### Ankush Burman Code ####
 
 ############################################################
 # SHAPE CLASS
@@ -102,7 +117,9 @@ class Shape(object):
     def get_blocks(self):
         '''returns the list of blocks
         '''
-        #YOUR CODE HERE
+        #### Ankush Burman Code ####
+        return self.blocks
+        #### Ankush Burman Code ####
         pass
 
     def draw(self, win):
@@ -138,9 +155,14 @@ class Shape(object):
            
         '''
         
-        #YOUR CODE HERE
-        # default implementation (MUST CHANGE)
+        #### Ankush Burman Code ####
+        for block in self.blocks:
+            if block.can_move(board, dx, dy):
+                continue 
+            else:
+                return False
         return True
+        #### Ankush Burman Code ####
     
     def get_rotation_dir(self):
         ''' Return value: type: int
@@ -328,8 +350,23 @@ class Board(object):
             
         '''
             
-        #YOUR CODE HERE
-        pass
+        #### Ankush Burman Code ####
+        pos_tuple = (x, y)
+
+        #Checks if x variable within x-axis bounds of board
+        x_check = 0 <= x < self.width 
+        #Checks if y variable within y-axis bounds of board
+        y_check = 0 <= y < self.height
+        #Checks if (x,y) position is occupied or not
+        occupy_check = (x,y) in self.grid 
+
+        if x_check and y_check and not occupy_check:
+            return True 
+        else:
+            return False
+        
+        return False
+        #### Ankush Burman Code ####
 
     def add_shape(self, shape):
         ''' Parameter: shape - type:Shape
@@ -343,8 +380,11 @@ class Board(object):
             
         '''
         
-        #YOUR CODE HERE
-        pass        
+        #### Ankush Burman Code ####
+        for block in shape.get_blocks():
+           coords = block.get_coords()
+           self.grid[coords] = block 
+        #### Ankush Burman Code ####
 
 
     def delete_row(self, y):
@@ -430,7 +470,7 @@ class Tetris(object):
     '''
     
     SHAPES = (I_shape, J_shape, L_shape, O_shape, S_shape, T_shape, Z_shape)
-    INPUT_KEYS = ("Right", "Left", "Up", "Down", "space")
+    INPUT_KEYS = ("Right", "Left", "Down")
     DIRECTION = {'Left':(-1, 0), 'Right':(1, 0), 'Down':(0, 1)}
     BOARD_WIDTH = 10
     BOARD_HEIGHT = 20
@@ -496,27 +536,34 @@ class Tetris(object):
 
         ''' 
         #### Ankush Burman Code ####
+        dx = 0 
+        dy = 0
+
         if direction == "right":
             dx = int(1)
-            dy = int(0)
-            self.current_shape.move(dx, dy)
+            dy = int(0) 
         elif direction == "left":
             dx = int(-1)
-            dy = int(0)
-            self.current_shape.move(dx, dy)
-        elif direction == "up":
-            self.current_shape.rotate(self.board)
+            dy = int(0)  
         elif direction == "down":
             dx = int(0)
             dy = int(1)
-            self.current_shape.move(dx, dy)
         else:
-            #NOTE TO SELF:Need to change this functionalty so it slams the shape
-            #instead of just moving it down like the down key.
-            dx = int(0)
-            dy = int(1)
-            self.current_shape.move(dx, dy)
-        pass
+            pass 
+        
+        if self.current_shape.can_move(self.board, dx, dy): 
+            self.current_shape.move(dx, dy) 
+            return True
+        elif direction == "down":
+            self.board.add_shape(self.current_shape)
+            self.current_shape = self.create_new_shape()
+            self.board.draw_shape(self.current_shape)
+            return False
+        else:
+            return False
+
+        return False
+
 
     def do_rotate(self):
         ''' Checks if the current_shape can be rotated and
@@ -543,10 +590,18 @@ class Tetris(object):
         '''
             
         #### Ankush Burman Code ####
+
         key = event.keysym #event.keysym is a tkinter function
+
         if key in Tetris.INPUT_KEYS:
             self.do_move(key.lower())
-        #print key
+        elif key == "space":
+            while self.do_move("down"):
+                pass
+        elif key == "up":
+            pass
+        else:
+            pass 
         return None 
        
 ################################################################
