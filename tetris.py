@@ -185,11 +185,18 @@ class Shape(object):
                         
             otherwise all is good, return True
         '''
-        
-        #YOUR CODE HERE
-        pass
+        #### Ankush Burman Code ####
+        for block in self.blocks: 
+            dx, dy = self.calc_rot_coords(block)
+            if block.can_move(board, dx, dy):
+                continue
+            else:
+                return False
 
-    def rotate(self, board):
+        return True 
+        #### Ankush Burman Code ####
+
+    def rotate(self):
         ''' Parameters: board - type: Board object
 
             rotates the shape:
@@ -198,9 +205,12 @@ class Shape(object):
             3. Move the block to the new position
             
         '''    
-
-        ####  YOUR CODE HERE #####
-        pass
+        #### Ankush Burman Code ####
+        for block in self.blocks:
+            dx, dy = self.calc_rot_coords(block)
+            block.move(dx, dy)
+        ####  Ankush Burman Code #####
+        return None 
 
         ### This should be at the END of your rotate code. 
         ### DO NOT touch it. Default behavior is that a piece will only shift
@@ -210,6 +220,24 @@ class Shape(object):
         if self.shift_rotation_dir:
             self.rotation_dir *= -1
 
+    def calc_rot_coords(self, block):
+        ''' Calculates a new position for each block based on the direction
+            of rotation of the shape. Returns the difference between the old 
+            coordinates and the new coordinates (Since all other move functions use
+            dx and dy).
+            The formula used was given in the assignment pdf.
+        ''' 
+        center_x, center_y = self.center_block.get_coords()
+        rot_dir = self.get_rotation_dir() 
+        block_x, block_y = block.get_coords()        
+        
+        new_x = center_x - rot_dir*center_y + rot_dir*block_y
+        new_y = center_y + rot_dir*center_x - rot_dir*block_x
+        
+        dx = new_x - block_x
+        dy = new_y - block_y 
+        
+        return (dx,dy) 
         
 
 ############################################################
@@ -222,7 +250,7 @@ class I_shape(Shape):
     def __init__(self, center):
         coords = [gr.Point(center.x - 2, center.y),
                   gr.Point(center.x - 1, center.y),
-                  gr.Point(center.x , center.y), # Centre: 2
+                  gr.Point(center.x    , center.y),
                   gr.Point(center.x + 1, center.y)]
         Shape.__init__(self, coords, "cyan")
         self.shift_rotation_dir = True
@@ -231,68 +259,64 @@ class I_shape(Shape):
 class J_shape(Shape):
     def __init__(self, center):
         coords = [gr.Point(center.x - 1, center.y),
-                  gr.Point(center.x, center.y), # Centre: 1
-                  gr.Point(center.x + 1 , center.y),
+                  gr.Point(center.x    , center.y),
+                  gr.Point(center.x + 1, center.y),
                   gr.Point(center.x + 1, center.y + 1)]
         Shape.__init__(self, coords, "RoyalBlue")        
         self.center_block = self.blocks[1]
 
 class L_shape(Shape):
     def __init__(self, center):
-        coords = [gr.Point(center.x - 1, center.y + 1),
-                  gr.Point(center.x - 1, center.y),
-                  gr.Point(center.x, center.y), # Centre: 2
-                  gr.Point(center.x + 1, center.y)]
+        coords = [gr.Point(center.x - 1, center.y),
+                  gr.Point(center.x    , center.y),
+                  gr.Point(center.x + 1, center.y),
+                  gr.Point(center.x - 1, center.y + 1)]
         Shape.__init__(self, coords, "orange")        
-        self.center_block = self.blocks[2]
-
+        self.center_block = self.blocks[1]
 
 class O_shape(Shape):
     def __init__(self, center):
-        coords = [gr.Point(center.x - 1, center.y + 1),
+        coords = [gr.Point(center.x    , center.y),
                   gr.Point(center.x - 1, center.y),
-                  gr.Point(center.x, center.y), # Centre: 2
-                  gr.Point(center.x, center.y + 1)]                                   
+                  gr.Point(center.x   , center.y + 1),
+                  gr.Point(center.x - 1, center.y + 1)]
         Shape.__init__(self, coords, "yellow1")
-        self.center_block = self.blocks[2]
+        self.center_block = self.blocks[0]
 
     def rotate(self, board):
         # Override Shape's rotate method since O_Shape does not rotate
-        return 
+        return None 
 
 class S_shape(Shape):
     def __init__(self, center):
-        coords = [gr.Point(center.x - 1, center.y + 1),
-                  gr.Point(center.x, center.y + 1),
-                  gr.Point(center.x, center.y), # Centre: 2
-                  gr.Point(center.x + 1, center.y)]
+        coords = [gr.Point(center.x    , center.y),
+                  gr.Point(center.x    , center.y + 1),
+                  gr.Point(center.x + 1, center.y),
+                  gr.Point(center.x - 1, center.y + 1)]
         Shape.__init__(self, coords, "chartreuse")
-        self.center_block = self.blocks[2]
+        self.center_block = self.blocks[0]
         self.shift_rotation_dir = True
         self.rotation_dir = -1
-
 
 class T_shape(Shape):
     def __init__(self, center):
         coords = [gr.Point(center.x - 1, center.y),
-                  gr.Point(center.x, center.y), # Centre: 1
-                  gr.Point(center.x, center.y + 1),
-                  gr.Point(center.x + 1, center.y)]
+                  gr.Point(center.x    , center.y),
+                  gr.Point(center.x + 1, center.y),
+                  gr.Point(center.x    , center.y + 1)]
         Shape.__init__(self, coords, "DarkViolet")
         self.center_block = self.blocks[1]
-
 
 class Z_shape(Shape):
     def __init__(self, center):
         coords = [gr.Point(center.x - 1, center.y),
-                  gr.Point(center.x, center.y), # Centre: 1
-                  gr.Point(center.x, center.y + 1),
+                  gr.Point(center.x    , center.y), 
+                  gr.Point(center.x    , center.y + 1),
                   gr.Point(center.x + 1, center.y + 1)]
         Shape.__init__(self, coords, "red")
         self.center_block = self.blocks[1]
         self.shift_rotation_dir = True
         self.rotation_dir = -1      
-
 
 
 ############################################################
@@ -399,9 +423,14 @@ class Board(object):
             
         '''
         
-        #YOUR CODE HERE
-        pass
-    
+        #### Ankush Burman Code ####
+        for x in range(0, self.width):
+            block = self.grid.pop((x,y))
+            block.undraw()
+                
+        return None 
+      #### Ankush Burman Code ####
+
     def is_row_complete(self, y):        
         ''' Parameter: y - type: int
             Return value: type: bool
@@ -413,8 +442,15 @@ class Board(object):
             
         '''
         
-        #YOUR CODE HERE
-        pass
+        #### Ankush Burman Code ####
+        for x in range(0, self.width):
+            if (x, y) in self.grid:
+                continue
+            else:
+                return False
+
+        return True 
+        #### Ankush Burman Code ####
     
     def move_down_rows(self, y_start):
         ''' Parameters: y_start - type:int                        
@@ -427,9 +463,17 @@ class Board(object):
                     and then place it back in the grid in the new position
 
         '''
-        
-        #YOUR CODE HERE
-        pass
+        # -1 because range function stops before hitting the
+        #last element. I need it to go to grid row 0 (y = 0).
+        for y in range(y_start, -1, -1):
+            for x in range(0, self.width):
+                if (x, y) in self.grid:
+                    block = self.grid.pop((x,y))
+                    block.move(0, 1)
+                    new_coords = block.get_coords()
+                    self.grid[new_coords] = block
+
+        return None 
     
     def remove_complete_rows(self):
         ''' removes all the complete rows
@@ -441,15 +485,32 @@ class Board(object):
 
         '''
         
-        #YOUR CODE HERE
+        for y in range(0, self.height):
+            if self.is_row_complete(y):
+                self.delete_row(y) 
+                self.move_down_rows(y-1)
+            else:
+                pass
+
+        return None 
 
     def game_over(self):
         ''' display "Game Over !!!" message in the center of the board
             HINT: use the Text class from the graphics library
         '''
         
-        #YOUR CODE HERE
-        pass        
+        #### Ankush Burman Code ####
+        x = int((self.width*Block.BLK_SIZE)/2)
+        y = int((self.height*Block.BLK_SIZE)/2)
+        center_point = gr.Point(x, y)
+        game_over = gr.Text(center_point, "Game Over!!!")
+        game_over.setSize(26)
+        game_over.setStyle("bold")
+        game_over.setOutline("HotPink")
+        game_over.draw(self.canvas)
+        
+        return None
+        #### Ankush Burman Code ####
 
 
 ############################################################
@@ -494,7 +555,7 @@ class Tetris(object):
         ####  Ankush Burman Code ####
 
         # For Step 9:  animate the shape!
-        ####  YOUR CODE HERE ####
+        self.animate_shape()
 
 
     def create_new_shape(self):
@@ -536,6 +597,7 @@ class Tetris(object):
 
         ''' 
         #### Ankush Burman Code ####
+        direction = direction.lower()
         dx = 0 
         dy = 0
 
@@ -557,7 +619,11 @@ class Tetris(object):
         elif direction == "down":
             self.board.add_shape(self.current_shape)
             self.current_shape = self.create_new_shape()
-            self.board.draw_shape(self.current_shape)
+            
+            if not self.board.draw_shape(self.current_shape):
+                self.board.game_over()
+
+            self.board.remove_complete_rows()
             return False
         else:
             return False
@@ -568,10 +634,15 @@ class Tetris(object):
     def do_rotate(self):
         ''' Checks if the current_shape can be rotated and
             rotates if it can
-        '''
-        
-        #YOUR CODE HERE
-        pass
+        ''' 
+        #### Ankush Burman Code ####
+        if self.current_shape.can_rotate(self.board):
+            self.current_shape.rotate()
+        else:
+            return None
+
+        return None 
+        #### Ankush Burman Code ####
     
     def key_pressed(self, event):
         ''' this function is called when a key is pressed on the keyboard
@@ -594,14 +665,15 @@ class Tetris(object):
         key = event.keysym #event.keysym is a tkinter function
 
         if key in Tetris.INPUT_KEYS:
-            self.do_move(key.lower())
+            self.do_move(key)
         elif key == "space":
             while self.do_move("down"):
                 pass
-        elif key == "up":
-            pass
+        elif key == "Up":
+            self.do_rotate()
         else:
             pass 
+
         return None 
        
 ################################################################
