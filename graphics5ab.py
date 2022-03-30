@@ -61,6 +61,11 @@ published by Franklin, Beedle & Associates.  Also see
 http://mcsp.wartburg.edu/zelle/python for a quick reference"""
 
 __version__ = "5.ab"
+# Version 5.ab Update 2 03/29/2022
+#     * Updated the library to use update_idletasks() method instead of
+#       the update() method. This increases performance greatly on MacOS.
+#       update_idletasks() only processes events in the idle queue, greatly
+#       reducing chances of getting nested event loops.
 
 # Version 5.ab 12/20/2021
 #     * updated the initialization of the master variable inside GraphWin
@@ -205,7 +210,7 @@ def update(rate=None):
         else:
             _update_lasttime = now
 
-    _root.update()
+    _root.update_idletasks()
 
 ############################################################################
 # Graphics classes start here
@@ -238,7 +243,7 @@ class GraphWin(tk.Canvas):
         self.closed = False
         self.master.lift()
         self.lastKey = ""
-        if autoflush: _root.update()
+        if autoflush: _root.update_idletasks()
 
     def __repr__(self):
         if self.isClosed():
@@ -294,7 +299,7 @@ class GraphWin(tk.Canvas):
 
     def __autoflush(self):
         if self.autoflush:
-            _root.update()
+            _root.update_idletasks()
 
     
     def plot(self, x, y, color="black"):
@@ -319,11 +324,11 @@ class GraphWin(tk.Canvas):
     def getMouse(self):
         """Wait for mouse click and return Point object representing
         the click"""
-        self.update()      # flush any prior clicks
+        self.update_idletasks()      # flush any prior clicks
         self.mouseX = None
         self.mouseY = None
         while self.mouseX == None or self.mouseY == None:
-            self.update()
+            self.update_idletasks()
             if self.isClosed(): raise GraphicsError("getMouse in closed window")
             time.sleep(.1) # give up thread
         x,y = self.toWorld(self.mouseX, self.mouseY)
@@ -336,7 +341,7 @@ class GraphWin(tk.Canvas):
         not been clicked since last call"""
         if self.isClosed():
             raise GraphicsError("checkMouse in closed window")
-        self.update()
+        self.update_idletasks()
         if self.mouseX != None and self.mouseY != None:
             x,y = self.toWorld(self.mouseX, self.mouseY)
             self.mouseX = None
@@ -349,7 +354,7 @@ class GraphWin(tk.Canvas):
         """Wait for user to press a key and return it as a string."""
         self.lastKey = ""
         while self.lastKey == "":
-            self.update()
+            self.update_idletasks()
             if self.isClosed(): raise GraphicsError("getKey in closed window")
             time.sleep(.1) # give up thread
 
@@ -361,7 +366,7 @@ class GraphWin(tk.Canvas):
         """Return last key pressed or None if no key pressed since last call"""
         if self.isClosed():
             raise GraphicsError("checkKey in closed window")
-        self.update()
+        self.update_idletasks()
         key = self.lastKey
         self.lastKey = ""
         return key
@@ -407,7 +412,7 @@ class GraphWin(tk.Canvas):
         for item in self.items[:]:
             item.undraw()
             item.draw(self)
-        self.update()
+        self.update_idletasks()
         
                       
 class Transform:
@@ -495,7 +500,7 @@ class GraphicsObject:
         self.id = self._draw(graphwin, self.config)
         graphwin.addItem(self)
         if graphwin.autoflush:
-            _root.update()
+            _root.update_idletasks()
         return self
 
             
@@ -509,7 +514,7 @@ class GraphicsObject:
             self.canvas.delete(self.id)
             self.canvas.delItem(self)
             if self.canvas.autoflush:
-                _root.update()
+                _root.update_idletasks()
         self.canvas = None
         self.id = None
 
@@ -531,7 +536,7 @@ class GraphicsObject:
                 y = dy
             self.canvas.move(self.id, x, y)
             if canvas.autoflush:
-                _root.update()
+                _root.update_idletasks()
            
     def _reconfig(self, option, setting):
         # Internal method for changing configuration of the object
@@ -544,7 +549,7 @@ class GraphicsObject:
         if self.canvas and not self.canvas.isClosed():
             self.canvas.itemconfig(self.id, options)
             if self.canvas.autoflush:
-                _root.update()
+                _root.update_idletasks()
 
 
     def _draw(self, canvas, options):
