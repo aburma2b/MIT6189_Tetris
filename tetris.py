@@ -4,7 +4,7 @@
 # tetris.py
 
 
-import graphics5ab as gr
+import graphics35 as gr
 import random
 import threading
 
@@ -338,7 +338,7 @@ class Board(object):
         self.height = height
 
         # create a canvas to draw the tetris shapes on
-        self.canvas = gr.GraphWin(win, self.width * Block.BLK_SIZE,
+        self.canvas = gr.CanvasFrame(win, self.width * Block.BLK_SIZE,
                                         self.height * Block.BLK_SIZE)
         self.canvas.setBackground('light gray')
 
@@ -543,7 +543,7 @@ class Tetris(object):
 
         # sets up the keyboard events
         # when a key is called the method key_pressed will be called
-        self.board.canvas.bind_all('<Key>', self.key_pressed)
+        self.win.bind_all('<Key>', self.key_pressed)
 
         # set the current shape to a random new shape
         self.current_shape = self.create_new_shape()
@@ -578,7 +578,7 @@ class Tetris(object):
         '''
         
         self.do_move('Down')
-        self.board.canvas.after(self.delay, self.animate_shape)
+        self.win.after(self.delay, self.animate_shape)
     
     def do_move(self, direction):
         ''' Parameters: direction - type: string
@@ -680,6 +680,6 @@ class Tetris(object):
 # Start the game
 ################################################################
 
-win = "Tetris"
+win = gr.Window("Tetris")
 game = Tetris(win)
-game.board.canvas.mainloop()
+win.mainloop()
