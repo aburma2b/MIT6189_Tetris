@@ -185,7 +185,13 @@ class CanvasFrame(tk.Frame):
         """Set background color of the window"""
         self.__checkOpen()
         self.canvas.config(bg=color)
-        
+
+    def setBorder(self, color, thickness=0):
+        """Set the border color and thickness around the frame"""
+        self.__checkOpen()
+        self.canvas.config(highlightbackground=color)
+        self.canvas.config(highlightthickness=thickness)
+
     def setCoords(self, x1, y1, x2, y2):
         """Set coordinates of window to run from (x1,y1) in the
         lower-left corner to (x2,y2) in the upper-right corner."""
@@ -226,7 +232,7 @@ class CanvasFrame(tk.Frame):
         self.mouseX = None
         self.mouseY = None
         while self.mouseX == None or self.mouseY == None:
-            self.update_idletasks()
+            self.update()
             if self.isClosed(): raise GraphicsError, "getMouse in closed window"
             time.sleep(.1) # give up thread
         x,y = self.toWorld(self.mouseX, self.mouseY)
@@ -239,7 +245,7 @@ class CanvasFrame(tk.Frame):
         not been clicked since last call"""
         if self.isClosed():
             raise GraphicsError, "checkMouse in closed window"
-        self.update_idletasks()
+        self.update()
         if self.mouseX != None and self.mouseY != None:
             x,y = self.toWorld(self.mouseX, self.mouseY)
             self.mouseX = None

@@ -28,7 +28,7 @@ class Block(gr.Rectangle):
     '''
     #Determines the block size in terms of pixels
     BLK_SIZE = 30 
-    #Determins the outline of each block in terms of pixels
+    #Determines the outline of each block in terms of pixels
     OUTLINE_WIDTH = 3
     #Sets the colour of the outline of the block
     OUTLINE_COLOR = "black"
@@ -79,11 +79,11 @@ class Block(gr.Rectangle):
             moves the block dx squares in the x direction
             and dy squares in the y direction
         '''
-
         self.x += dx
         self.y += dy
 
         gr.Rectangle.move(self, dx*Block.BLK_SIZE, dy*Block.BLK_SIZE)
+        return None
 
     #### Ankush Burman Code ####
     def get_coords(self):
@@ -130,6 +130,7 @@ class Shape(object):
         ''' 
         for block in self.blocks:
             block.draw(win)
+        return None
 
     def move(self, dx, dy):
         ''' Parameters: dx - type: int
@@ -141,6 +142,7 @@ class Shape(object):
         '''
         for block in self.blocks:
             block.move(dx, dy)
+        return None
 
     def can_move(self, board, dx, dy):
         ''' Parameters: dx - type: int
@@ -219,6 +221,8 @@ class Shape(object):
         ### accepted rotation positions.
         if self.shift_rotation_dir:
             self.rotation_dir *= -1
+        
+        return None
 
     def calc_rot_coords(self, block):
         ''' Calculates a new position for each block based on the direction
@@ -331,12 +335,14 @@ class Board(object):
                     canvas - type:CanvasFrame - where the pieces will be drawn
                     grid - type:Dictionary - keeps track of the current state of
                     the board; stores the blocks for a given position
+                    cleared_lines - keeps tracks of how many lines/rows have
+                    been cleard
     '''
     
     def __init__(self, win, width, height):
         self.width = width
         self.height = height
-
+        self.total_lines = 0
         # create a canvas to draw the tetris shapes on
         self.canvas = gr.CanvasFrame(win, self.width * Block.BLK_SIZE,
                                         self.height * Block.BLK_SIZE)
@@ -345,6 +351,7 @@ class Board(object):
         # create an empty dictionary
         # currently we have no shapes on the board
         self.grid = {}
+
 
     def draw_shape(self, shape):
         ''' Parameters: shape - type: Shape
@@ -378,7 +385,7 @@ class Board(object):
         pos_tuple = (x, y)
 
         #Checks if x variable within x-axis bounds of board
-        x_check = 0 <= x < self.width 
+        x_check = 0  <= x < self.width 
         #Checks if y variable within y-axis bounds of board
         y_check = 0 <= y < self.height
         #Checks if (x,y) position is occupied or not
@@ -409,7 +416,7 @@ class Board(object):
            coords = block.get_coords()
            self.grid[coords] = block 
         #### Ankush Burman Code ####
-
+        return None
 
     def delete_row(self, y):
         ''' Parameters: y - type:int
@@ -480,19 +487,47 @@ class Board(object):
             1. for each row, y, 
             2. check if the row is complete
                 if it is,
-                    delete the row
-                    move all rows down starting at row y - 1
-
+                    * delete the row
+                    * add +1 to cleared_lines
+                    * move all rows down starting at row y - 1
+                  
         '''
-        
+        cleared_lines = 0 
         for y in range(0, self.height):
             if self.is_row_complete(y):
-                self.delete_row(y) 
+                self.delete_row(y)
+                self.total_lines += 1
+                cleared_lines += 1
                 self.move_down_rows(y-1)
             else:
                 pass
 
+        return cleared_lines  
+
+    def gameover_init(self):
+        '''Initializes the objects for the game over message
+        '''
+        #Game Over rectangle
+        p1 = gr.Point(Block.BLK_SIZE*1, Block.BLK_SIZE*9)
+        p2 = gr.Point(Block.BLK_SIZE*9, Block.BLK_SIZE*11)
+        self.go_rect = gr.Rectangle(p1, p2)
+        self.go_rect.setOutline("black")
+        self.go_rect.setWidth(5)
+        self.go_rect.setFill( "MediumAquamarine")
+        #Game Over text
+        center_point = self.go_rect.getCenter()
+        self.go_text = gr.Text(center_point, "Game Over!")
+        self.go_text.setSize(20)
+        self.go_text.setStyle("bold")
+        self.go_text.setOutline("black")
         return None 
+
+    def gameover_draw(self):
+       '''Draws the game over message
+       '''
+       self.go_rect.draw(self.canvas)
+       self.go_text.draw(self.canvas)
+       return None
 
     def game_over(self):
         ''' display "Game Over !!!" message in the center of the board
@@ -500,18 +535,122 @@ class Board(object):
         '''
         
         #### Ankush Burman Code ####
-        x = int((self.width*Block.BLK_SIZE)/2)
-        y = int((self.height*Block.BLK_SIZE)/2)
-        center_point = gr.Point(x, y)
-        game_over = gr.Text(center_point, "Game Over!!!")
-        game_over.setSize(26)
-        game_over.setStyle("bold")
-        game_over.setOutline("HotPink")
-        game_over.draw(self.canvas)
-        
+        self.gameover_init()
+        self.gameover_draw()
         return None
         #### Ankush Burman Code ####
 
+
+############################################################
+# SCOREBOARD CLASS
+############################################################
+
+class ScoreBoard(object):
+    ''' ScoreBoard class: it represents the score board
+
+        Attributes: width - type:int - width of the board in squares
+                    height - type:int - height of the board in squares
+                    canvas - type:CanvasFrame - where the score will be drawn
+                    grid - type:Dictionary - keeps track of the current state of
+                    lelvel - keeps track of the level of the game 
+                    score - keeps track of the score of the game 
+    '''
+
+    def __init__(self, win, width, height):
+        self.width = width
+        self.height = height
+        self.level = 1
+        self.gravity_up()
+        self.score = 0
+
+        # create a canvas to draw the tetris shapes on
+        self.canvas = gr.CanvasFrame(win, self.width * Block.BLK_SIZE,
+                                        self.height * Block.BLK_SIZE)
+        self.canvas.setBackground('light gray')
+        self.init_objects()
+        self.draw()
+
+    def init_rect(self):
+        #Initializes a rectangle based on the self.pos variable.
+        #Sets its outline and colour.
+        canvas_w = self.canvas.getWidth()
+        canvas_h = self.canvas.getHeight()
+        origin = gr.Point(0, 0)
+        self.point2 = gr.Point(canvas_w, canvas_h)
+        self.rect = gr.Rectangle(origin, self.point2)
+        self.rect.setOutline("black")
+        self.rect.setWidth(5)
+        self.rect.setFill( "MediumAquamarine")
+        return None
+
+    def init_text(self):
+        lvl_num = str(self.level)
+        lvltxt_pnt = gr.Point(Block.BLK_SIZE*5, Block.BLK_SIZE*0.7)
+        self.lvl_text = gr.Text(lvltxt_pnt, "Level: " + lvl_num)
+        score_num = str(self.score)
+        scrtxt_pnt = gr.Point(Block.BLK_SIZE*5, Block.BLK_SIZE*1.5)
+        self.scr_text = gr.Text(scrtxt_pnt, "Score: " + score_num)
+        return None 
+
+    def init_objects(self):
+        self.init_rect()
+        self.init_text()
+        return None
+
+    def draw(self):
+        self.rect.draw(self.canvas)
+        self.lvl_text.draw(self.canvas)
+        self.scr_text.draw(self.canvas)
+        return None 
+
+    def level_up(self, total_lines):
+        if total_lines > (5*self.level):
+            self.level += 1
+            self.gravity_up()
+            lvl_num = str(self.level)
+            self.lvl_text.setText("Level " + lvl_num)
+            return self.gravity 
+        else:
+            pass
+
+        return False
+
+    def gravity_up(self):
+        ''' Return type: None
+            Calculates the gravity speed of the game
+            based on the current level. Formula taken from 2022 tetris
+            guideline. The unit of the solution is Seconds.
+        '''
+        lvl = self.level
+        #Gravity formula for tetris as per tetris guideline 2022
+        #multiplied by 1000 to yield the time in ms
+        self.gravity = ((0.8 - ((lvl-1.0)*0.007))**(lvl-1.0))
+        return None 
+
+    def score_up(self, cleared_lines):
+        """ Points per line cleared:
+            1 line cleard: 100 * level
+            2 lines cleared: 300 * level
+            3 lines cleared: 500 * level
+            4 lines cleared: 800 * level
+            n lines cleared: line_score * level
+        """
+        n = cleared_lines
+        #Figured out this formula myself. 
+        #The calculation needs to be done in floating point.
+        if cleared_lines > 0:
+            line_score = (50.0/3.0)*(n**3)+(-100.0)*(n**2)+(1150.0/3.0)*(n)+(-200.0)
+            points = line_score * self.level 
+            self.score += points
+            score_num = str(int(self.score))
+            self.scr_text.setText("Score: " + score_num)
+        
+        return None
+
+    def update(self, cleared_lines, total_lines):
+        self.score_up(cleared_lines)
+        return self.level_up(total_lines)
+ 
 
 ############################################################
 # TETRIS CLASS
@@ -535,9 +674,12 @@ class Tetris(object):
     DIRECTION = {'Left':(-1, 0), 'Right':(1, 0), 'Down':(0, 1)}
     BOARD_WIDTH = 10
     BOARD_HEIGHT = 20
-    
+    SCR_BOARD_WIDTH = 10
+    SCR_BOARD_HEIGHT = 2
+
     def __init__(self, win):
         self.board = Board(win, self.BOARD_WIDTH, self.BOARD_HEIGHT)
+        self.scr_board = ScoreBoard(win, self.SCR_BOARD_WIDTH, self.SCR_BOARD_HEIGHT)
         self.win = win
         self.delay = 1000 #ms
 
@@ -572,6 +714,17 @@ class Tetris(object):
         return shape 
         #### Ankush Burman Code ####
     
+    def update_speed(self, gravity):
+        ''' Return type: None
+            Updates the delay variable which controls the speed
+            of the down animation of the tetrominoes. 
+            Gravity is in Seconds and tkinter likes ms for after function.
+            Therefore gravity is multiplied by 1000 to yield ms. 
+        '''
+        self.delay = gravity*1000 
+        self.delay = int(self.delay)
+        return None
+
     def animate_shape(self):
         ''' animate the shape - move down at equal intervals
             specified by the delay attribute
@@ -579,7 +732,8 @@ class Tetris(object):
         
         self.do_move('Down')
         self.win.after(self.delay, self.animate_shape)
-    
+        return None
+
     def do_move(self, direction):
         ''' Parameters: direction - type: string
             Return value: type: bool
@@ -623,8 +777,15 @@ class Tetris(object):
             if not self.board.draw_shape(self.current_shape):
                 self.board.game_over()
 
-            self.board.remove_complete_rows()
+            clrd_lines = self.board.remove_complete_rows()
+            lvl_check = self.scr_board.update(clrd_lines, self.board.total_lines)
+            if lvl_check:
+                self.update_speed(self.scr_board.gravity)
+            else:
+                pass
+
             return False
+
         else:
             return False
 
