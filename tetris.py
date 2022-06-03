@@ -96,12 +96,19 @@ class Shape(object):
         Base class for all the tetris shapes
         Attributes: blocks - type: list - the list of blocks making up the shape
                     rotation_dir - type: int - the current rotation direction of the shape
+                    hold - type: Bool - Hold can only be used once per new shape spawn.
+                                        This flag determines if hold has been used or not.
+                                        This variable should be set to false when it the 
+                                        shape is being re-created from the hold system. 
                     shift_rotation_dir - type: Boolean - whether or not the shape rotates
     '''
 
     def __init__(self, coords, color, block_sz = Block.BLK_SIZE):
         self.blocks = []
         self.rotation_dir = 1
+        self.hold = True
+        self.soft_lock = False
+        self.softlock_move = 15
         ### A boolean to indicate if a shape shifts rotation direction or not.
         ### Defaults to false since only 3 shapes shift rotation directions (I, S and Z)
         self.shift_rotation_dir = False
@@ -143,6 +150,9 @@ class Shape(object):
             and dy squares in the y direction, i.e.
             moves each of the blocks
         '''
+        if self.soft_lock == True:
+            self.softlock_move -= 1
+
         for block in self.blocks:
             block.move(dx, dy)
 
@@ -158,7 +168,7 @@ class Shape(object):
             and dy squares in the y direction, i.e.
             check if each of the blocks can move
             Returns True if all of them can, and False otherwise
-        '''    
+        '''   
         for block in self.blocks:
             if block.can_move(board, dx, dy):
                 continue 
@@ -203,7 +213,10 @@ class Shape(object):
             1. Get the rotation direction using the get_rotation_dir method
             2. Compute the position of each block after rotation
             3. Move the block to the new position    
-        '''    
+        '''
+        if self.soft_lock == True:
+            self.softlock_move -= 1
+
         for block in self.blocks:
             dx, dy = self.calc_rot_coords(block)
             block.move(dx, dy) 
@@ -239,6 +252,9 @@ class Shape(object):
         
         return (dx,dy) 
         
+    def softlock_reset(self):
+         self.soft_lock = False
+         self.softlock_move = 15
 
 ############################################################
 # ALL SHAPE CLASSES
@@ -963,8 +979,10 @@ class Tetris(object):
     '''
     
     SHAPES = (I_shape, J_shape, L_shape, O_shape, S_shape, T_shape, Z_shape)
-    INPUT_KEYS = ("Right", "Left", "Down")
-    DIRECTION = {'Left':(-1, 0), 'Right':(1, 0), 'Down':(0, 1)}
+    DIR_KEYS = ("right", "left", "down")
+    LOCK_KEYS = ("space", "down")
+    SOFTLOCK_KEYS = ("space", "down", "animate")
+    DIRECTION = {'left':(-1, 0), 'right':(1, 0), 'down':(0, 1), 'animate':(0, 1)}
     BOARD_WIDTH = 10
     BOARD_HEIGHT = 20
     SCR_BOARD_WIDTH = 10
@@ -990,17 +1008,20 @@ class Tetris(object):
         
         #Initialize the hold system
         self.hold_shape = None 
-        self.hold_flag = True
 
-        #Animation variable
-        self.animation = None
+        #Used for controlling lock delay
+        self.lock_delay = None
 
         # Draw the current_shape on the board (take a look at the
         # draw_shape method in the Board class)
         self.board.draw_shape(self.current_shape)
         self.prv_board.draw_preview(self.seven_bag) 
+        
+        #Set the state of the game
+        
 
         # For Step 9:  animate the shape
+        self.animation = None 
         self.animate_shape()
        
         #NOTE############ FOR TESTING ONLY ############NOTE 
@@ -1037,7 +1058,6 @@ class Tetris(object):
 
         shape = self.seven_bag.pop(0)(gr.Point(x, y))
         self.seven_bag.append(self.next_bag.pop(0))
-        self.hold_flag = True
 
         return shape 
         
@@ -1056,7 +1076,8 @@ class Tetris(object):
         ''' animate the shape - move down at equal intervals
             specified by the delay attribute
         ''' 
-        self.do_move('Down')
+        self.tetris_control("animate")
+        print self.delay
         self.animation = self.win.after(self.delay, self.animate_shape)
         return None
 
@@ -1077,48 +1098,76 @@ class Tetris(object):
 
         ''' 
         direction = direction.lower()
-        dx = 0 
-        dy = 0
-
-        if direction == "right":
-            dx = int(1)
-            dy = int(0) 
-        elif direction == "left":
-            dx = int(-1)
-            dy = int(0)  
-        elif direction == "down":
-            dx = int(0)
-            dy = int(1)
-        else:
-            pass 
-        
+        dx, dy = Tetris.DIRECTION[direction]
+        print "do_move", dx, dy  #NOTE  
         if self.current_shape.can_move(self.board, dx, dy): 
             self.current_shape.move(dx, dy) 
             return True
-
-        elif direction == "down":
-            self.board.add_shape(self.current_shape)
-            self.current_shape = self.create_new_shape()
-            self.prv_board.draw_preview(self.seven_bag)
-            #NOTE for testing: self.prv_board.draw(self.TEST_SHAPES, self.test_shape)  #NOTE 
-
-            if not self.board.draw_shape(self.current_shape):
-                self.board.game_over()
-                self.win.after_cancel(self.animation)
-
-            clrd_lines = self.board.remove_complete_rows()
-            lvl_check = self.scr_board.update(clrd_lines, self.board.total_lines)
-            if lvl_check:
-                self.update_speed(self.scr_board.gravity)
-            else:
-                pass
-
-            return False
-
         else:
             return False
 
         return False
+    
+    def normal_move(self, key):
+        direction = key.lower()
+        dx, dy = Tetris.DIRECTION[direction]
+        if self.current_shape.can_move(self.board, dx, dy):
+            self.current_shape.move(dx, dy)
+        elif key in Tetris.SOFTLOCK_KEYS:
+            print self.animation
+            self.win.after_cancel(self.animation)
+            self.animation = None
+            print "soft locking shape"
+            self.current_shape.soft_lock = True
+            print self.current_shape.soft_lock
+            self.lock_delay = self.win.after(500, self.shape_lock)
+    
+    def softlock_move(self, key):
+        if self.lock_delay:
+            print "Cancelling lock_delay"
+            self.win.after_cancel(self.lock_delay)
+            self.lock_delay = None
+
+        if self.do_move(key) == True:
+            dx, dy = Tetris.DIRECTION["down"]
+            if self.current_shape.can_move(self.board, dx, dy):
+                if self.lock_delay:
+                    self.win.after_cancel(self.lock_delay)
+                    self.lock_delay = None 
+
+                self.current_shape.softlock_reset()
+                        
+                if self.animation:
+                    self.win.after_cancel(self.animation)
+                    self.animation = None
+                self.animate_shape()
+                return None
+            
+        self.lock_delay = self.win.after(500, self.shape_lock)
+
+    def shape_lock(self):
+        #import pdb; pdb.set_trace() #############NOTE NOTE NOTE############
+        print "shape lock called"
+        self.board.add_shape(self.current_shape) 
+        clrd_lines = self.board.remove_complete_rows()
+        lvl_check = self.scr_board.update(clrd_lines, self.board.total_lines)
+        if lvl_check:
+            self.update_speed(self.scr_board.gravity)
+
+        self.current_shape = self.create_new_shape()
+        self.prv_board.draw_preview(self.seven_bag)
+        #NOTE for testing: self.prv_board.draw(self.TEST_SHAPES, self.test_shape)  #NOTE 
+        if self.board.draw_shape(self.current_shape):
+            if self.animation:
+                self.win.after_cancel(self.animation)
+                self.animation = None
+
+            self.animate_shape()  
+        else:
+            self.board.game_over()
+            self.win.after_cancel(self.animation)
+
+        return None 
 
     def do_rotate(self):
         ''' Checks if the current_shape can be rotated and
@@ -1143,6 +1192,8 @@ class Tetris(object):
                 2. Sets the hold shape to the current shape
                 3. Initializes a new shape based on the type of previously
                    held shape.
+                4. All shapes re-created by hold have their internal hold variable
+                   set to false.
             * Draws the new current shape
             * Draws the new hold shape on the preview board
             * Sets hold flag to false (hold can only be used once per new shape spawn)
@@ -1158,14 +1209,94 @@ class Tetris(object):
             temp = self.hold_shape
             self.hold_shape = self.current_shape
             self.current_shape.undraw()
-            self.current_shape = temp.__class__(gr.Point(x, y))
+            temp = temp.__class__(gr.Point(x, y))
+            temp.hold = False 
+            self.current_shape = temp 
 
         if not self.board.draw_shape(self.current_shape):
             self.board.game_over()
 
-        self.prv_board.draw_hold(self.hold_shape)
-        self.hold_flag = False 
+        self.prv_board.draw_hold(self.hold_shape) 
         return None
+
+
+    def tetris_control(self, key):
+        key = key.lower()
+        #soft_lock = self.current_shape.soft_lock
+        print self.current_shape.soft_lock 
+        
+        if key == 'h':
+            if self.current_shape.hold == True:
+                self.hold()
+
+        if self.current_shape.soft_lock == False:  
+            if key == "space":
+                while self.do_move("down"):
+                    pass 
+            elif key == "up":
+                self.do_rotate()
+            elif key in Tetris.DIR_KEYS or key == "animate":
+                self.normal_move(key)
+
+        if self.current_shape.soft_lock == True:
+            print "Tetris control soft_lock == true"
+            if key in  Tetris.LOCK_KEYS:
+                if self.lock_delay:
+                    self.win.after_cancel(self.lock_delay)
+                    self.lock_delay = None
+
+                self.shape_lock() 
+            elif key == "up":
+                if self.lock_delay:
+                    self.win.after_cancel(self.lock_delay)
+                    self.lock_delay = None
+
+                self.do_rotate()
+
+                self.lock_delay = self.win.after(500, self.shape_lock)
+            elif key == "animate":
+                pass 
+            elif key in Tetris.DIR_KEYS:
+                if self.lock_delay:
+                    print "Cancelling lock_delay"
+                    self.win.after_cancel(self.lock_delay)
+                    self.lock_delay = None
+
+                if self.do_move(key) == True:
+                    dx, dy = Tetris.DIRECTION["down"]
+                    if self.current_shape.can_move(self.board, dx, dy):
+                        if self.lock_delay:
+                            self.win.after_cancel(self.lock_delay)
+                            self.lock_delay = None 
+
+                        self.current_shape.softlock_reset()
+                        
+                        if self.animation:
+                            self.win.after_cancel(self.animation)
+                            self.animation = None
+                        self.animate_shape()
+                        return None
+            
+                self.lock_delay = self.win.after(500, self.shape_lock)
+        
+            if self.current_shape.softlock_move <= 0:
+                if self.lock_delay:
+                    self.win.after_cancel(self.lock_delay)
+                    self.lock_delay = None
+
+                self.shape_lock()
+            
+        #if self.state == "unlock":
+            #self.state = "play"
+            #self.animate_shape()
+
+        #if self.state == "game_over":
+            #self.win.after_cancel(self.animation)
+            #self.board.game_over()
+        
+        #print self.state
+        return None
+
 
     def key_pressed(self, event):
         ''' this function is called when a key is pressed on the keyboard
@@ -1185,19 +1316,21 @@ class Tetris(object):
 
         '''
         key = event.keysym #event.keysym is a tkinter function
+        key = key.lower()
         
-        if key in Tetris.INPUT_KEYS:
-            self.do_move(key)
-        elif key == "space":
-            while self.do_move("down"):
-                pass
-        elif key == "Up":
-            self.do_rotate()
-        elif key == 'h':
-            if self.hold_flag == True:
-                self.hold()
-        else:
-            pass 
+        self.tetris_control(key)
+#        if key in Tetris.DIR_KEYS:
+#            self.do_move(key)
+#        elif key == "space":
+#            while self.do_move("down"):
+#                pass
+#        elif key == "Up":
+#            self.do_rotate()
+#        elif key == 'h':
+#            if self.current_shape.hold == True:
+#                self.hold()
+#        else:
+#            pass 
 
         return None 
        
