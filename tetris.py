@@ -2,8 +2,7 @@
 # Section: Self
 # Date: Started: Mar 16, 2022; 
 # tetris.py
-
-#NOTE: Next up: Rotation kick system NOTE 
+ 
 import graphics35 as gr
 import random
 
@@ -94,28 +93,46 @@ class Block(gr.Rectangle):
 class Shape(object):
     ''' Shape class:
         Base class for all the tetris shapes
-        Attributes: blocks - type: list - the list of blocks making up the shape
-                    rotation_dir - type: int - the current rotation direction of the shape
-                    hold - type: Bool - Hold can only be used once per new shape spawn.
+        Attributes: blocks - type: list - the list of blocks making up the shape 
+                    can_hold - type: Bool - Hold can only be used once per new shape spawn.
                                         This flag determines if hold has been used or not.
                                         This variable should be set to false when it the 
                                         shape is being re-created from the hold system. 
-                    shift_rotation_dir - type: Boolean - whether or not the shape rotates
+                    soft_lock - type: Bool - Determines if the shape is in soft_lock state
+                                             or not.
+                    soft_lock_move - type: int - Keeps track of the number of times the 
+                                                 shape has been moved while in soft_lock
+                                                 state. A shape can be moved a maximum of
+                                                 15 times in soft_lock state.
+                    KICK_OFFSET - type: 2 dimensional array - Holds the kick offset 
+                                  values for J, L, S, T, Z shapes. Each row in the array
+                                  corresponds to the rotational state of the shape. Each
+                                  column is the offset test number which must be done in 
+                                  that order. I shape has it's own unique offset values.
+                                  O shape does not rotate.
     '''
+    #Really for reference, the state numbers correspond to the rows in self.KICK_OFFSET array.
+    ROTATION_STATES = {"spawn":0, "counter_clockwise":1, "consecutive":2, "clockwise":3}
 
     def __init__(self, coords, color, block_sz = Block.BLK_SIZE):
-        self.blocks = []
-        self.rotation_dir = 1
+        self.blocks = [] 
+        self.rotation_state = self.ROTATION_STATES["spawn"] 
         self.can_hold = True
         self.soft_lock = False
         self.soft_lock_move = 15
-        ### A boolean to indicate if a shape shifts rotation direction or not.
-        ### Defaults to false since only 3 shapes shift rotation directions (I, S and Z)
-        self.shift_rotation_dir = False
-        
+        #The offset values are taken from the Tetris Guideline 2022. The signs are flipped
+        #relative to the sign of the values in the guideline because the coordinate system
+        #here is flipped. 
+        self.KICK_OFFSET = [[(0,0), (0,0), (0,0), (0,0), (0,0)],
+                           [(0,0), (1,0), (1,1), (0,-2), (1,-2)],
+                           [(0,0), (0,0), (0,0), (0,0), (0,0)],
+                           [(0,0), (-1,0), (-1,1), (0,-2), (-1,-2)]]
+
+
         for pos in coords:
             self.blocks.append(Block(pos, color, block_sz))
-
+       
+        
     def get_blocks(self):
         '''returns the list of blocks
         '''
@@ -129,7 +146,6 @@ class Shape(object):
         ''' 
         for block in self.blocks:
             block.draw(win)
-
         return None
     
     def undraw(self):
@@ -139,25 +155,8 @@ class Shape(object):
         '''
         for block in self.blocks:
             block.undraw()
-
         return None
-
-    def move(self, dx, dy):
-        ''' Parameters: dx - type: int
-                        dy - type: int
-
-            moves the shape dx squares in the x direction
-            and dy squares in the y direction, i.e.
-            moves each of the blocks
-        '''
-        if self.soft_lock == True:
-            self.soft_lock_move -= 1
-
-        for block in self.blocks:
-            block.move(dx, dy)
-
-        return None
-
+     
     def can_move(self, board, dx, dy):
         ''' Parameters: dx - type: int
                         dy - type: int
@@ -177,66 +176,214 @@ class Shape(object):
         return True
 
     def can_move_down(self, board):
+        ''' Parameters: board - type: Board
+            
+            Return value: type: bool
+
+            checks to see if the shape can move down 
+            or not.
+        '''
         dx = 0
         dy = 1
         return self.can_move(board, dx, dy) 
-
-    def get_rotation_dir(self):
-        ''' Return value: type: int
-        
-            returns the current rotation direction
+    
+    def do_move(self, dx, dy):
+        ''' Parameters: dx - type: int
+                        dy - type: int
+            
+            Return value: None 
+            
+            moves the shape dx squares in the x direction
+            and dy squares in the y direction, i.e.
+            moves each of the blocks
         '''
-        return self.rotation_dir
+        if self.soft_lock == True:
+            self.soft_lock_move -= 1
 
-    def can_rotate(self, board):
+        for block in self.blocks:
+            block.move(dx, dy)
+        return None 
+
+    def move(self, board, dx, dy):
+        ''' Parameters: board - type: Board
+                        dx - type: int
+                        dy - type: int
+
+            Return value: type: bool
+
+            Controls the movement flow of the shape:
+            1. If shape is in soft_lock state then substracts
+               1 from soft_lock_move. Shape can only be moved a limited amount
+               of times in soft_lock state, upto a maximum of 15 times.
+            2. If the shape can be moved then moves the shape and returns true
+            3. If shape can not be moved then does nothing and returns False
+        '''
+        if self.soft_lock == True:
+            self.soft_lock_move -= 1
+
+        if self.can_move(board, dx, dy) == True:
+            self.do_move(dx, dy)
+            return True 
+        return False     
+         
+    def can_rotate(self, board, direction):
         ''' Parameters: board - type: Board object
             Return value: type : bool
             
-            Checks if the shape can be rotated.
-            
-            1. Get the rotation direction using the get_rotation_dir method
-            2. Compute the position of each block after rotation and check if
-            the new position is valid
+            Checks if the shape can be rotated:
+            1. Compute the position of each block after rotation 
+            2. Check if the new position is valid
             3. If any of the blocks cannot be moved to their new position,
             return False
                         
             otherwise all is good, return True
         '''
         for block in self.blocks: 
-            dx, dy = self.calc_rot_coords(block)
+            dx, dy = self.calc_rot_coords(block, direction)
             if block.can_move(board, dx, dy):
                 continue
             else:
                 return False
-
         return True 
         
-    def rotate(self):
+    def do_rotate(self, direction):
         ''' Parameters: board - type: Board object
 
             rotates the shape:
-            1. Get the rotation direction using the get_rotation_dir method
-            2. Compute the position of each block after rotation
-            3. Move the block to the new position    
-        '''
-        if self.soft_lock == True:
-            self.soft_lock_move -= 1
-
+            1. Compute the position of each block after rotation
+            2. Move the block to the new position    
+        ''' 
         for block in self.blocks:
-            dx, dy = self.calc_rot_coords(block)
+            dx, dy = self.calc_rot_coords(block, direction)
             block.move(dx, dy) 
+        return None 
+    
+    def can_kick(self, board, direction, kick_offset): 
+        ''' Parameters: board - type: Board object
+            Return value: type : bool
+            
+            Checks if the shape can be rotated and kicked into the position
+            determined by the kick offset: 
+            1. Compute the position of each block after rotation and with the kick
+            offset applied.
+            2. Check if the new position is valid
+            3. If any of the blocks cannot be moved to their new position,
+            return False
+                        
+            otherwise all is good, return True
+        '''
+        #The rotation and kick_offset can be done in one go during the checking
+        #phase because the center block is not being moved. The rotation formula
+        #calc_rot_coords uses the center block as an origin point. If the center
+        #block is moved before all the block's new rotational position is calculated
+        #it throws of the calculation.
+        for block in self.blocks: 
+            dx, dy = self.calc_rot_coords(block, direction)
+            kick_dx = dx + kick_offset[0]
+            kick_dy = dy + kick_offset[1]
+            if block.can_move(board, kick_dx, kick_dy):
+                continue
+            else:
+                return False
+        return True
+    
+    def do_kick(self, direction, kick_offset): 
+        ''' Parameters: direction - type: int
+                        kick_offset - type: int tuple 
+            
+            Return value: None 
+            
+            rotates and kicks the shape:
+            1. Rotate the whole shape
+            2. Compute the position of each block after kick with the 
+               kick_offset 
+            3. Move the block to the new position    
+        ''' 
+        #In this method the shape needs to be rotated first and then kicked, unlike
+        #can_kick because the function calc_rot_coords uses the center block as an
+        #origin point. If the center block is moved before all the other block's
+        #new rotated positions are caluclated, it throws of the calculation for those
+        #block.
+        self.do_rotate(direction) 
+        for block in self.blocks:
+            #Not using tuple unpacking to keep the code similar
+            #to the code in can_kick() function.
+            kick_dx = kick_offset[0]
+            kick_dy = kick_offset[1]
+            block.move(kick_dx, kick_dy)
+        return None
 
-        ### This should be at the END of your rotate code. 
-        ### DO NOT touch it. Default behavior is that a piece will only shift
-        ### rotation direciton after a successful rotation. This ensures that 
-        ### pieces which switch rotations definitely remain within their 
-        ### accepted rotation positions.
-        if self.shift_rotation_dir:
-            self.rotation_dir *= -1
-        
+    def rotate_kick(self, board, direction):
+        ''' Parameters: board - type: Board object
+                        direction - type: int 
+
+            Return value: None
+
+            If normal rotation isn't possible, the shape is attempted to be kicked
+            into a new position by calculating several offsets based on the shapes'
+            current state and next state. The first offset that works is what
+            the shape is kicked into. If none of the offsets work, then the shape
+            is not rotated or kicked. Offsets were taken from the "How SRS really works" 
+            from the SRS section of the Tetris Guideline, 2022.
+        '''
+        curr_state = self.rotation_state
+        next_state = self.calc_rot_state(direction)
+        #Just a little sanity check
+        len_current = len(self.KICK_OFFSET[curr_state])
+        len_next = len(self.KICK_OFFSET[next_state]) 
+        if len_current == len_next:
+            for j in range(len_current):
+                kick_offset = self.calc_kick_translation(curr_state, next_state, j)  
+                if self.can_kick(board, direction, kick_offset) == True:
+                    self.do_kick(direction, kick_offset)
+                    self.rotation_state = next_state
+                    return None 
+                else:
+                    continue 
         return None 
 
-    def calc_rot_coords(self, block):
+    def calc_kick_translation(self, curr_state, next_state, column):
+        ''' Parameters: curr_state - type: int
+                        next_state - type: int
+                        column - type: int
+            
+            Return: kick_translation - type: int tuple 
+
+            Calculates the kick offset of the current shape based on the
+            current state and the next state. 
+        '''
+        tuple_current = self.KICK_OFFSET[curr_state][column]
+        tuple_next = self.KICK_OFFSET[next_state][column]
+        kick_translation = map(lambda c,n: c-n, tuple_current, tuple_next)
+        kick_translation = tuple(kick_translation)
+        return kick_translation
+
+    def calc_rot_state(self, direction):
+        ''' Parameters: direction - type: int
+            
+            Return: new_sate - type: int 
+            
+            Calculates the new rotation of the state by taking in the current state
+            and the input. Input can only be 1 or -1. -1 for clockwise and 1 for 
+            counter-clockwise.  Tetris guideline 2022 defines what all the rotation
+            states are. Formula derived to satisfy these states. For the formula 
+            (state+dir)%4 to work the spawn state needs to = 2 and the inputs must 
+            be -1 for clockwise and 1 for counter-clockwise. Tetris guideline 2022 
+            defines what all the rotation states are. 
+            
+            Rotaton states:
+            Spawn =  0
+            Counter-clockwise =  1
+            Consecutive rotation =  2
+            Clockwise =  3
+        '''
+        #Calculating the new state
+        state_int = self.rotation_state
+        #Derived the formula myself
+        new_state = (state_int+direction)%4
+        return new_state 
+
+    def calc_rot_coords(self, block, direction):
         ''' Parameters: block - type: Block
             Return: type: int  
             Calculates a new position for each block based on the direction
@@ -246,20 +393,47 @@ class Shape(object):
             The formula used was given in the assignment pdf.
         ''' 
         center_x, center_y = self.center_block.get_coords()
-        rot_dir = self.get_rotation_dir() 
+        rot_dir = direction
         block_x, block_y = block.get_coords()        
         
         new_x = center_x - rot_dir*center_y + rot_dir*block_y
         new_y = center_y + rot_dir*center_x - rot_dir*block_x
         
         dx = new_x - block_x
-        dy = new_y - block_y 
-        
-        return (dx,dy) 
-        
+        dy = new_y - block_y  
+        return (dx,dy)
+
+    def rotate(self, board, direction):
+        ''' Parameters: board - type: Board object
+                        direction - type: int
+
+            Return: None
+
+            Controls the whole rotation flow for the shape:
+            1. If shape is in soft_lock state substract 1 from soft_lock_move
+            2. If shape can be rotated normally then: Calculated and assign new
+               rotated state, and then rotate the shape.
+            3. If shape can not be rotated then: rotate and kick the shape.
+        '''
+        if self.soft_lock == True:
+            self.soft_lock_move -= 1
+
+        if self.can_rotate(board, direction) == True:
+            self.rotation_state = self.calc_rot_state(direction) 
+            self.do_rotate( direction)
+        else:
+            self.rotate_kick(board, direction) 
+        return None
+
     def soft_lock_reset(self):
+         ''' Parameters: None
+             Return: None
+             Resets the soft_lock state and soft_lock_move of the shape
+             to spawn conditions.
+        '''
          self.soft_lock = False
          self.soft_lock_move = 15
+         return None 
 
 ############################################################
 # ALL SHAPE CLASSES
@@ -273,8 +447,17 @@ class I_shape(Shape):
                   gr.Point(center.x    , center.y),
                   gr.Point(center.x + 1, center.y)]
         Shape.__init__(self, coords, color, block_sz)
-        self.shift_rotation_dir = True
         self.center_block = self.blocks[2]
+        #For reference, the state numbers correspond to the rows on the array:
+        #ROTATION_STATES = {"spawn":0, "counter_clockwise":1, "consecutive":2, "clockwise":3}
+        #The offset values are taken from the Tetris Guideline 2022. The signs are flipped
+        #relative to the sign of the values in the guideline because the coordinate system
+        #here is flipped. 
+        #Override shape class kick offset because I shape requires different offsets.
+        self.KICK_OFFSET = [[(0,0), (1,0), (-2,0), (1,0), (-2,0)],
+                           [(0,-1), (0,-1), (0,-1), (0,1), (0,-2)],
+                           [(1,-1), (-1,-1), (2,-1), (-1,0), (2,0)],
+                           [(1,0), (0,0), (0,0), (0,-1), (0,2)]]
 
 class J_shape(Shape):
     def __init__(self, center, color = 'RoyalBlue', block_sz = Block.BLK_SIZE):
@@ -294,7 +477,7 @@ class L_shape(Shape):
         Shape.__init__(self, coords, color, block_sz)        
         self.center_block = self.blocks[1]
 
-class O_shape(Shape):
+class O_shape(Shape): 
     def __init__(self, center, color = 'yellow1', block_sz = Block.BLK_SIZE):
         coords = [gr.Point(center.x    , center.y),
                   gr.Point(center.x - 1, center.y),
@@ -302,11 +485,12 @@ class O_shape(Shape):
                   gr.Point(center.x - 1, center.y + 1)]
         Shape.__init__(self, coords, color, block_sz)
         self.center_block = self.blocks[0]
-
-    def rotate(self):
+        
+    def rotate(self, board, direction):
+        if self.soft_lock == True:
+            self.soft_lock_move -= 1
         # Override Shape's rotate method since O_Shape does not rotate
-        return None 
-
+        
 class S_shape(Shape):
     def __init__(self, center, color = 'chartreuse', block_sz = Block.BLK_SIZE):
         coords = [gr.Point(center.x    , center.y),
@@ -315,8 +499,6 @@ class S_shape(Shape):
                   gr.Point(center.x - 1, center.y + 1)]
         Shape.__init__(self, coords, color, block_sz)
         self.center_block = self.blocks[0]
-        self.shift_rotation_dir = True
-        self.rotation_dir = -1
 
 class T_shape(Shape):
     def __init__(self, center, color = 'DarkViolet', block_sz = Block.BLK_SIZE):
@@ -335,8 +517,6 @@ class Z_shape(Shape):
                   gr.Point(center.x + 1, center.y + 1)]
         Shape.__init__(self, coords, color, block_sz)
         self.center_block = self.blocks[1]
-        self.shift_rotation_dir = True
-        self.rotation_dir = -1      
 
 
 ############################################################
@@ -721,7 +901,7 @@ class ScoreBoard(object):
                 - The new gravity is returned (this is used in the tetris
                   class to update delay)
         '''
-        if total_lines > (5*self.level):
+        if total_lines > (10*self.level):
             self.level += 1
             self.gravity_up()
             lvl_str = str(self.level)
@@ -765,6 +945,7 @@ class ScoreBoard(object):
         #Figured out this formula myself. The formula calculates 
         #the line score depending on the number of lines cleared.
         #The calculation needs to be done in floating point.
+        #I know I could used a dictionary but this is more fun.
         if cleared_lines > 0:
             line_score = (50.0/3.0)*(n**3)+(-100.0)*(n**2)+(1150.0/3.0)*(n)+(-200.0)
             points = line_score * self.level 
@@ -1050,11 +1231,15 @@ class Tetris(object):
     '''
     
     SHAPES = (I_shape, J_shape, L_shape, O_shape, S_shape, T_shape, Z_shape)
-    FLOW_CONTROL_KEYS = ("h", "p", "r")
-    MOVE_KEYS = ("up", "right", "left", "down", "space", "animate") 
+    HOLD_KEYS = ("c", "shift_l", "shift_r")
+    FLOW_CONTROL_KEYS = HOLD_KEYS + ("p", "r")
+    #MOVE_KEYS = ("up", "right", "left", "down", "space", "animate") 
     DIR_KEYS = ("right", "left", "down")
+    ROTATION_KEYS = ("up", "x", "control_l", "control_r", "z")
+    MOVE_KEYS = DIR_KEYS + ROTATION_KEYS + ("space", "animate") 
     LOCK_KEYS = ("space", "down")
     DIRECTION = {'left':(-1, 0), 'right':(1, 0), 'down':(0, 1), 'animate':(0, 1)}
+    ROTATION_DIRECTION = {"up":-1, "x":-1, "control_l":1, "control_r":1, "z":1}
     BOARD_WIDTH = 10
     BOARD_HEIGHT = 20
     SCR_BOARD_WIDTH = 10
@@ -1259,14 +1444,12 @@ class Tetris(object):
         self.lock_delay = self.win.after(500, self.shape_lock)
         return None 
 
-    def do_rotate(self):
+    def do_rotate(self, direction):
         ''' Checks if the current_shape can be rotated and
             rotates if it can
         ''' 
-        if self.current_shape.can_rotate(self.board):
-            self.current_shape.rotate()
-        else:
-            return None 
+        rot_dir = Tetris.ROTATION_DIRECTION[direction]
+        self.current_shape.rotate(self.board, rot_dir) 
         return None
 
     def do_slam(self):
@@ -1292,13 +1475,8 @@ class Tetris(object):
         ''' 
         direction = direction.lower()
         dx, dy = Tetris.DIRECTION[direction]
-        #print "do_move", dx, dy  #NOTE #NOTE #NOTE  
-        if self.current_shape.can_move(self.board, dx, dy): 
-            self.current_shape.move(dx, dy) 
-            return True
-        else:
-            return False 
-        return False 
+        #print "do_move", dx, dy  #NOTE #NOTE #NOTE 
+        return self.current_shape.move(self.board, dx, dy)
 
     def normal_move(self, key):
         ''' Handles movement of shape when shape is NOT in soft lock state.
@@ -1351,7 +1529,7 @@ class Tetris(object):
         ''' Deals with the flow control keys.
             Holds shape, pauses game, resets game
         '''
-        if key == 'h':
+        if key in Tetris.HOLD_KEYS:
             if self.current_shape.can_hold == True:
                 self.hold()
         return None 
@@ -1362,8 +1540,8 @@ class Tetris(object):
         '''
         if key == "space":
             self.do_slam() 
-        elif key == "up":
-            self.do_rotate()
+        elif key in Tetris.ROTATION_KEYS:
+            self.do_rotate(key)
         elif key in Tetris.DIR_KEYS or key == "animate":
             self.normal_move(key)
         return None 
@@ -1376,9 +1554,9 @@ class Tetris(object):
         #print "Tetris control soft_lock == true" NOTE NOTE NOTE
         if key in  Tetris.LOCK_KEYS:
             self.shape_lock()   
-        elif key == "up":
+        elif key in Tetris.ROTATION_KEYS:
             self.cancel_lock_delay()
-            self.do_rotate()
+            self.do_rotate(key)
             if self.current_shape.can_move_down(self.board):
                 self.soft_lock_disable()
             else:
@@ -1412,6 +1590,8 @@ class Tetris(object):
         '''
         key = event.keysym #event.keysym is a tkinter function
         key = key.lower()
+        #NOTE for debugging
+        print key
         self.tetris_control(key)
         return None 
        
