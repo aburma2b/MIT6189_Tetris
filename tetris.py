@@ -42,8 +42,7 @@ class Tetris(object):
     SHAPES = (sh.I_shape, sh.J_shape, sh.L_shape, sh.O_shape, sh.S_shape, 
                                                    sh.T_shape, sh.Z_shape)
     HOLD_KEYS = ("c", "shift_l", "shift_r")
-    FLOW_CONTROL_KEYS = HOLD_KEYS + ("p", "r")
-    #MOVE_KEYS = ("up", "right", "left", "down", "space", "animate") 
+    FLOW_CONTROL_KEYS = HOLD_KEYS + ("p", "escape")
     DIR_KEYS = ("right", "left", "down")
     ROTATION_KEYS = ("up", "x", "control_l", "control_r", "z")
     MOVE_KEYS = DIR_KEYS + ROTATION_KEYS + ("space", "animate") 
@@ -57,10 +56,11 @@ class Tetris(object):
     SCR_BOARD_HEIGHT = 2
 
     def __init__(self, win):
+        #Intializes the three boards
         self.prv_board = br.PreviewBoard(win, self.SCR_BOARD_WIDTH, self.SCR_BOARD_HEIGHT, 
                                                                          sh.Block.BLK_SIZE)
-        self.board = br.PlayBoard(win, self.BOARD_WIDTH, 
-                                  self.BOARD_HEIGHT, sh.Block.BLK_SIZE, self.PLAYFIELD_HEIGHT)
+        self.board = br.PlayBoard(win, self.BOARD_WIDTH, self.BOARD_HEIGHT, sh.Block.BLK_SIZE, 
+                                                                         self.PLAYFIELD_HEIGHT)
         self.scr_board = br.ScoreBoard(win, self.SCR_BOARD_WIDTH, self.SCR_BOARD_HEIGHT, 
                                                                        sh.Block.BLK_SIZE)
         self.win = win
@@ -75,7 +75,8 @@ class Tetris(object):
         # shape
         self.seven_bag = []
         self.next_bag = []
-        self.current_shape = self.create_new_shape()
+        self.ghost_shape = None 
+        self.current_shape = self.create_new_shape() 
         
         #Initialize the hold system
         self.hold_shape = None 
@@ -85,24 +86,34 @@ class Tetris(object):
 
         # Draw the current_shape on the board (take a look at the
         # draw_shape method in the Board class)
+        self.board.draw_shape(self.ghost_shape) 
         self.board.draw_shape(self.current_shape)
         self.prv_board.draw_preview(self.seven_bag) 
         
-        #Set the state of the game
-        
-
-        # For Step 9:  animate the shape
+        #Starting animation
         self.animation = None 
         self.start_animation()
-       
-        #NOTE############ FOR TESTING ONLY ############NOTE 
-        #test_x = int(self.BOARD_WIDTH/2)
-        #test_y = 0 
-        #self.test_shape = I_shape(gr.Point(test_x, test_y))
+    
+    def fisher_yates_shuffle(self, any_list):
+        ''' Parameters: n - type: int
+            Return:: shuffle_list - type: list or tuple
 
-        #self.TEST_SHAPES = [I_shape, I_shape, I_shape]
-        #self.prv_board.draw(self.TEST_SHAPES, self.test_shape)
-
+            This function generates random permutations with uniform
+            probability of generating each permutation. I know that python
+            uses the Fisher-Yates shuffle for random.shuffle and random.sample
+            but I explicitly wanted to use this shufflei since have an equal
+            probability of getting any permutation of Tetrominos is a core mechanic
+            of the 7-bag system. Also I don't have to worry about future changes to python.
+        '''
+        shuffle_list = list(any_list) 
+        n = len(shuffle_list)
+        for j in range(n-1, 0, -1):
+            p = random.randint(0, j)
+            swap = shuffle_list[j]
+            shuffle_list[j] = shuffle_list[p]
+            shuffle_list[p] = swap
+        return shuffle_list 
+    
     def create_new_shape(self):
         ''' Parameters: None 
             Return value: new_shape -  type: Shape
@@ -116,23 +127,35 @@ class Tetris(object):
                removes it from the list. 
             2. Adds a shape to the list from the next_bag 
             3. Creates a new shape, which was picked from seven_bag,
-               that is centered at y = 0 and x = int(self.BOARD_WIDTH/2)
-            4. returns the shape
+               that is centered at y = -2 and x = int((self.BOARD_WIDTH/2)-1)
+            4. Creates new ghost shape based on the newly created shape 
+            5. Adds a new shape to the end of 7-bag from next bag
+            6. Updates preview board 
+            7. returns the shape
         '''
         #One is substracted from board_width/2 because x = 4 
         #is the actual centre of the board since counting starts
         #from zero.
+        #According to the tetris guidelines the shape should spawn
+        #on the 21-22 rows and then move down.
+
+        #I know that python uses the Fisher-Yates shuffle for random.shuffle 
+        #and random.sample but I explicitly wanted to use this shufflei since 
+        #have an equal probability of getting any permutation of Tetrominos is 
+        #a core mechanic of the 7-bag system.
+
         x = int((self.BOARD_WIDTH/2)-1)
-        y = 0
-        list_len = len(Tetris.SHAPES)
+        y = -1 
+        list_len = len(self.SHAPES)
         
         if len(self.seven_bag) == 0 and len(self.next_bag) == 0:
-            self.seven_bag = random.sample(Tetris.SHAPES, list_len)
-            self.next_bag = random.sample(Tetris.SHAPES, list_len)
+            self.seven_bag = self.fisher_yates_shuffle(self.SHAPES)
+            self.next_bag = self.fisher_yates_shuffle(self.SHAPES)
         elif len(self.next_bag) == 0:
-            self.next_bag = random.sample(Tetris.SHAPES, list_len)
-
+            self.next_bag = self.fisher_yates_shuffle(self.SHAPES)
+        
         new_shape = self.seven_bag.pop(0)(gr.Point(x, y))
+        self.ghost_shape = sh.Ghost_shape(self.board, new_shape) 
         self.seven_bag.append(self.next_bag.pop(0))
         self.prv_board.draw_preview(self.seven_bag)
         return new_shape
@@ -168,15 +191,17 @@ class Tetris(object):
         #One is substracted from board_width/2 because x = 4 
         #is the actual centre of the board since counting starts
         #from zero.
+        #According to the tetris guidelines the shape should spawn
+        #on the 21-22 rows and then move down.
         x = int((self.BOARD_WIDTH/2)-1)
-        y = 0
-
+        y = -1 
         temp = self.hold_shape
         self.hold_shape = self.current_shape
         self.current_shape.undraw()
         temp = temp.__class__(gr.Point(x, y))
         temp.can_hold = False 
-        self.current_shape = temp 
+        self.current_shape = temp
+        self.ghost_shape = sh.Ghost_shape(self.board, self.current_shape)
         return None
 
     def hold(self):
@@ -190,9 +215,8 @@ class Tetris(object):
             * Draws the new hold shape on the preview board
             * Draws the new current shape
         '''
-        #print "HOLDING" #NOTE NOTE NOTE
-        if self.current_shape.soft_lock_state() == True:
-            #print "Hold disabling soft lock" NOTE NOTE NOTE
+        self.ghost_shape.undraw()
+        if self.current_shape.get_soft_lock_state() == True:
             self.soft_lock_disable()
 
         if self.hold_shape == None:
@@ -200,29 +224,31 @@ class Tetris(object):
         else:
             self.hold_swap()
 
-        self.prv_board.draw_hold(self.hold_shape) 
-        if self.board.draw_shape(self.current_shape) == False:
-            #print "Hold game over" NOTE NOTE NOTE
+        if self.board.game_over_check(self.current_shape) == True:
             self.board.game_over()
-        #print "Hold created new shape" NOTE NOTE NOTE
+            self.cancel_animation()
+        else:
+            self.prv_board.draw_hold(self.hold_shape)
+            #Ghost shape should always be drawn before current shape
+            self.board.draw_shape(self.ghost_shape)
+            self.board.draw_shape(self.current_shape)
         return None
     
-    def add_clear_score(self):
+    def clearlines_upscore(self):
         ''' Parameters: None
             Return: None
 
             Adds the shape to the board, cleares full lines from the board, and
             updates the score, level and speed (if needed).
         '''
-        self.board.add_shape(self.current_shape) 
         clrd_lines = self.board.remove_complete_rows()
-        new_gravity = self.scr_board.update(clrd_lines, self.board.total_line_clears())
+        new_gravity = self.scr_board.update(clrd_lines, self.board.get_total_line_clears())
         
         if new_gravity is not False:
             self.update_speed(new_gravity)
         return None 
     
-    def tspin_add_clear_score(self):
+    def tspin_clearlines_upscore(self):
         ''' Parameters: None
             Return: None
 
@@ -231,10 +257,9 @@ class Tetris(object):
             speed (if needed). The current shape needs to be a T-shape for this 
             method to work.
         '''
-        self.board.add_shape(self.current_shape) 
         full_or_mini = self.current_shape.full_or_mini(self.board) 
         clrd_lines = self.board.remove_complete_rows()
-        ttl_lines = self.board.total_line_clears()  
+        ttl_lines = self.board.get_total_line_clears()  
         new_gravity = self.scr_board.tspin_update(clrd_lines, ttl_lines, 
                                                                full_or_mini)
         if new_gravity is not False:
@@ -258,34 +283,35 @@ class Tetris(object):
         ''' Parameters: None
             Return: None
 
-            Adds board to shape updates scoreboard, gravity (if there is a level up),
+            Adds shape to board updates scores, gravity (if there is a level up),
             and spawns new shape on the board if there is space.
             Sets game to over if there is no space for new shape.
         '''
-        #import pdb;  pdb.set_trace() #############NOTE NOTE NOTE############
-        #print "shape lock called" NOTE NOTE NOTE
-        soft_lock = self.current_shape.soft_lock_state() 
-        soft_lock_move = self.current_shape.soft_lock_move() 
-        if soft_lock == True or soft_lock_move == False:
-           
-           #Sometimes the shape can end up "floating" because of the SRS'
-           #kick mechanism. Don't want the shape to lock in mid air.
-            while self.do_move("down"):
-                pass
-            
-            if self.tspin_detect() == True:
-                self.tspin_add_clear_score()
-            else: 
-                self.add_clear_score()
+        soft_lock_state = self.current_shape.get_soft_lock_state() 
+        soft_lock_can_move = self.current_shape.soft_lock_can_move() 
+        if soft_lock_state == True or soft_lock_can_move == False:
+           self.board.add_shape(self.current_shape)
+           self.ghost_shape.undraw()
+           new_shape = self.create_new_shape() 
+           if self.board.game_over_check(new_shape, self.current_shape) == True:
+               self.board.game_over()
+               self.cancel_animation()
+           else:
+                if self.tspin_detect() == True:
+                    self.tspin_clearlines_upscore()
+                else: 
+                    self.clearlines_upscore()
 
-            self.current_shape = self.create_new_shape()
-            #NOTE self.prv_board.draw_preview(self.seven_bag)
-            #NOTE for testing: self.prv_board.draw(self.TEST_SHAPES, self.test_shape)  #NOTE 
-            if self.board.draw_shape(self.current_shape) == True:
-                self.soft_lock_disable() #NOTE THIS MIGHT BREAK THINGS #NOTE   
-            else:
-                self.board.game_over()
-                self.cancel_animation()
+                self.current_shape = new_shape
+                #Ghost shape needs to be updated before being drawn because
+                #lines might have moved down above, if there were completed
+                #lines. This ghost shape is created when a new main shape
+                #is created
+                self.ghost_shape.update(self.board, self.current_shape)
+                #Ghost shape should always be drawn before main shape 
+                self.board.draw_shape(self.ghost_shape) 
+                if self.board.draw_shape(self.current_shape) == True:
+                    self.soft_lock_disable()   
         return None 
  
     def update_speed(self, gravity):
@@ -309,7 +335,6 @@ class Tetris(object):
             specified by the delay attribute
         ''' 
         self.tetris_control("animate")
-        #print self.delay NOTE NOTE NOTE
         self.animation = self.win.after(self.delay, self.animate_shape)
         return None
     
@@ -361,6 +386,61 @@ class Tetris(object):
         self.lock_delay = self.win.after(500, self.shape_lock)
         return None 
 
+    def soft_lock_enable(self):
+        ''' Parameters: None
+            Return: None
+
+            Puts tetris and the shape in soft lock mode.
+            Main tetris animation is cancelled,
+            shape is put into soft lock state, and the lock
+            delay timer is started.
+        '''
+        self.current_shape.soft_lock_on()
+        self.start_lock_delay()  
+        return None
+
+    def soft_lock_disable(self):
+        ''' Parameters: None
+            Return: None
+
+            Takes tetris and the shape out of soft lock state.
+            Lock delay timer is cancelled, shape's soft lock state is reset,
+            and the main animation is restarted
+        '''
+        self.cancel_lock_delay() 
+        self.current_shape.soft_lock_reset()
+        return None 
+    
+    def do_move(self, direction):
+        ''' Parameters: direction - type: string
+            Return value: type: bool
+
+            Move the current shape in the direction specified by the parameter:
+            First check if the shape can move. If it can, move it and return True
+            else return False. 
+        ''' 
+        direction = direction.lower()
+        dx, dy = Tetris.DIRECTION[direction]
+        result = self.current_shape.move(self.board, dx, dy)
+        self.ghost_shape.update(self.board, self.current_shape)
+        if result == True and direction == 'down':
+            self.scr_board.softdrop_score_up() 
+        return result
+
+    def do_slam(self):
+        ''' Parameters: None
+            Return: None
+
+            "Slams" the shape shape down and instantly locks in 
+            the shape. No soft lock if shape is slammed.
+        '''
+        while self.do_move("down"):
+            self.scr_board.harddrop_score_up()
+            pass
+        self.current_shape.soft_lock_on()
+        self.shape_lock()
+        return None
+    
     def do_rotate(self, direction):
         ''' Parameters: direction - type:string
             Rreturn: None 
@@ -369,7 +449,8 @@ class Tetris(object):
             rotates if it can
         ''' 
         rot_dir = Tetris.ROTATION_DIRECTION[direction]
-        self.current_shape.rotate(self.board, rot_dir) 
+        self.current_shape.rotate(self.board, rot_dir)
+        self.ghost_shape.update(self.board, self.current_shape)
         return None
     
     def normal_rotate(self, key):
@@ -404,32 +485,6 @@ class Tetris(object):
             self.start_lock_delay()
         return None
 
-    def do_move(self, direction):
-        ''' Parameters: direction - type: string
-            Return value: type: bool
-
-            Move the current shape in the direction specified by the parameter:
-            First check if the shape can move. If it can, move it and return True
-            else return False. 
-        ''' 
-        direction = direction.lower()
-        dx, dy = Tetris.DIRECTION[direction]
-        #print "do_move", dx, dy  #NOTE #NOTE #NOTE 
-        return self.current_shape.move(self.board, dx, dy)
-
-    def do_slam(self):
-        ''' Parameters: None
-            Return: None
-
-            "Slams" the shape shape down and instantly locks in 
-            the shape. No soft lock if shape is slammed.
-        '''
-        while self.do_move("down"):
-            pass
-        self.current_shape.soft_lock_on()
-        self.shape_lock()
-        return None
-    
     def normal_move(self, key):
         ''' Parameters: key - type:string
             Return: None
@@ -464,34 +519,6 @@ class Tetris(object):
                 self.start_lock_delay()
         return None
  
-    def soft_lock_enable(self):
-        ''' Parameters: None
-            Return: None
-
-            Puts tetris and the shape in soft lock mode.
-            Main tetris animation is cancelled,
-            shape is put into soft lock state, and the lock
-            delay timer is started.
-        '''
-        #print self.animation #NOTE NOTE NOTE
-        #print "soft locking shape" #NOTE NOTE NOTE
-        self.current_shape.soft_lock_on()
-        #print self.current_shape.soft_lock NOTE NOTE NOTE
-        self.start_lock_delay()  
-        return None
-
-    def soft_lock_disable(self):
-        ''' Parameters: None
-            Return: None
-
-            Takes tetris and the shape out of soft lock state.
-            Lock delay timer is cancelled, shape's soft lock state is reset,
-            and the main animation is restarted
-        '''
-        self.cancel_lock_delay() 
-        self.current_shape.soft_lock_reset()
-        return None 
-
     def flow_control(self, key):
         ''' Parameters: key - type:string
             Return: None
@@ -502,6 +529,8 @@ class Tetris(object):
         if key in Tetris.HOLD_KEYS:
             if self.current_shape.can_hold == True:
                 self.hold()
+        elif key == 'escape':
+            self.reset()
         return None 
 
     def normal_control(self, key):
@@ -527,7 +556,6 @@ class Tetris(object):
             soft lock state. lock delay timer needs to be reset after 
             every move, lock keys instantly lock the shape.
         '''
-        #print "Tetris control soft_lock == true" NOTE NOTE NOTE
         if key in  Tetris.LOCK_KEYS:
             self.shape_lock()   
         elif key in Tetris.ROTATION_KEYS:
@@ -548,12 +576,22 @@ class Tetris(object):
         if key in Tetris.FLOW_CONTROL_KEYS:
             self.flow_control(key)
         elif key in Tetris.MOVE_KEYS:
-            if self.current_shape.soft_lock_state() == False:
+            #Two consecutive if statements on purpose instead of
+            #if - elif - else
+            if self.current_shape.get_soft_lock_state() == False:
                 self.normal_control(key)
-            if self.current_shape.soft_lock_state() == True:
+            if self.current_shape.get_soft_lock_state() == True:
                 self.soft_lock_control(key)  
-         
-        if self.current_shape.soft_lock_move() == False: 
+      
+        #This works here the best in terms of gameplay mechanics.
+        #(Decided after lots of testing)
+        #Can't just lock the shape even if it's soft lock state
+        #move count is zero if it can still move down. Can only
+        #lock the shape if and when it is in a position where it 
+        #can not move down anymore. 
+        soft_lock_can_move = self.current_shape.soft_lock_can_move() 
+        can_move_down = self.current_shape.can_move_down(self.board)
+        if soft_lock_can_move == False and can_move_down == False:
             self.shape_lock() 
         return None
 
@@ -566,11 +604,97 @@ class Tetris(object):
         '''
         key = event.keysym #event.keysym is a tkinter function
         key = key.lower()
-        #NOTE for debugging
-        print key #NOTE NOTE NOTE
         self.tetris_control(key)
         return None 
-       
+    
+    def close_boards(self): 
+        ''' Paramters: None
+            Return: None
+
+            Destroys the preview board, score board, and play board.
+        '''
+        self.prv_board.canvas.canvas.pack_forget()
+        self.prv_board.canvas.canvas.destroy()
+        self.prv_board.canvas.destroy()
+        self.board.canvas.canvas.pack_forget()
+        self.board.canvas.canvas.destroy()
+        self.board.canvas.destroy()
+        self.scr_board.canvas.canvas.pack_forget()
+        self.scr_board.canvas.canvas.destroy()
+        self.scr_board.canvas.destroy()
+    
+    def delete_internal_obj(self):
+        ''' Parameters: None
+            Return: None
+
+            Deletes internal objects. Don't know if it is really necessary
+            but still doing it.
+        '''
+        del self.prv_board
+        del self.board
+        del self.scr_board
+        del self.delay
+        del self.seven_bag
+        del self.next_bag
+        del self.ghost_shape
+        del self.current_shape
+        del self.hold_shape
+        del self.lock_delay
+        del self.animation
+
+    def reset(self):
+        ''' Parameters: None
+            Return: None
+
+            Resets the whole game and re-starts it.
+        '''
+        #Cancel animation
+        self.cancel_animation()
+        
+        #Close boards, delete all internal objects
+        self.close_boards()
+        self.delete_internal_obj()
+
+        #Re-initialization
+        self.prv_board = br.PreviewBoard(win, self.SCR_BOARD_WIDTH, self.SCR_BOARD_HEIGHT, 
+                                                                         sh.Block.BLK_SIZE)
+        self.board = br.PlayBoard(win, self.BOARD_WIDTH, 
+                                  self.BOARD_HEIGHT, sh.Block.BLK_SIZE, self.PLAYFIELD_HEIGHT)
+        self.scr_board = br.ScoreBoard(win, self.SCR_BOARD_WIDTH, self.SCR_BOARD_HEIGHT, 
+                                                                       sh.Block.BLK_SIZE)
+        #self.win = win
+        self.delay = 1000 #ms
+
+        #Don't think I have to re-do this
+        #I will leave it in but commented out
+        # sets up the keyboard events
+        # when a key is called the method key_pressed will be called
+        #self.win.bind_all('<Key>', self.key_pressed)
+
+        # Re-initialize the seven bag system
+        # Create new shape and sets the current shape to the new
+        # shape
+        self.seven_bag = []
+        self.next_bag = []
+        self.ghost_shape = None 
+        self.current_shape = self.create_new_shape() 
+        
+        #Re-initialize the hold system
+        self.hold_shape = None 
+
+        #Used for controlling lock delay
+        self.lock_delay = None
+
+        # Draw the current_shape on the board (take a look at the
+        # draw_shape method in the Board class)
+        self.board.draw_shape(self.ghost_shape) 
+        self.board.draw_shape(self.current_shape)
+        self.prv_board.draw_preview(self.seven_bag) 
+        
+        # Re-start animation
+        self.animation = None 
+        self.start_animation()
+
 
 ################################################################
 # Start the game

@@ -58,15 +58,15 @@ class Board(object):
         new_line = gr.Line(start_point, end_point)
         return new_line 
 
-    def make_text(self, cntr_coord, string, size, style='normal', color='black'):
-        ''' Paramters: cntr_coord - type: int tuple
+    def make_text(self, center_coord, string, size, style='normal', color='black'):
+        ''' Paramters: center_coord - type: int tuple
                        string - type: string
                        style - type: string
                        color - type: string
 
             Makes a graphics text object with the given arguments and returns it.
         '''
-        cntr_x, cntr_y = cntr_coord
+        cntr_x, cntr_y = center_coord
         cntr_point = gr.Point(cntr_x, cntr_y)
         new_text = gr.Text(cntr_point, string)
         new_text.setSize(size)
@@ -94,7 +94,8 @@ class PlayBoard(Board):
                                              text.
                     grid - type:Dictionary - keeps track of the current state of
                     the board; stores the blocks for a given position
-                    cleared_lines - keeps tracks of how many lines/rows have
+                    highest_block - type:Dictionary - keeps track of the highest block
+                    for every x-value (horizontal position) 
     '''   
     def __init__(self, win, width, height, block_size, total_height):
         self.width = width
@@ -113,8 +114,41 @@ class PlayBoard(Board):
         # create an empty dictionary
         # currently we have no shapes on the board
         self.grid = {}
+        self.highest_blocks  = {}
         Board.__init__(self, win, self.width, self.height, self.block_size, self.background) 
+    
+    def get_height(self):
+        ''' Parameters: None
+            Return: type - int 
 
+            Returns the height of the PlayBoard
+        '''
+        return self.height
+    
+    def get_total_height(self):
+        ''' Parameters: None
+            Return: type - int
+
+            Returns the total height of the playboard
+        '''
+        return self.total_height
+    
+    def get_highest_blocks(self):
+        ''' Parameters: None
+            Return: type: dictionary
+
+            Returns the dictionary of the highest blocks on the PlayBoard
+        '''
+        return self.highest_blocks 
+
+    def get_total_line_clears(self):
+        ''' Parameters: None
+            Return: type:int - self.total_lines
+         
+            Returns the latest value of variable self.total_lines
+        '''
+        return self.total_lines
+    
     def draw_shape(self, shape):
         ''' Parameters: shape - type: Shape
             Return value: type: bool
@@ -125,9 +159,8 @@ class PlayBoard(Board):
         if shape.can_move(self, 0, 0):
             shape.draw(self.canvas)
             return True
-
         return False
-
+    
     def can_move(self, x, y):
         ''' Parameters: x - type:int
                         y - type:int
@@ -141,23 +174,38 @@ class PlayBoard(Board):
             return False
 
             3. otherwise return True
-            
         '''
-        pos_tuple = (x, y)
-
         #Checks if x variable within x-axis bounds of board
         x_check = 0  <= x < self.width 
         #Checks if y variable within y-axis bounds of board
         y_check = self.buffer_height <= y < self.height
         #Checks if (x,y) position is occupied or not
         occupy_check = (x,y) in self.grid 
-
         if x_check and y_check and not occupy_check:
             return True 
-        else:
-            return False
-        
         return False 
+
+    def update_highest_blocks(self):
+        ''' Parameters: None
+            Return: None
+
+            Updates the dictionary of current highest blocks
+            on the PlayBoard. 
+            Goes through every column on the PlayBoard and finds
+            the highest block, in this case it is the "lowest block"
+            because the y-coordinate on the PlayBoard is flipped.
+            If there are no blocks in the column then the entry
+            corresponding to that column is emptied. 
+        '''
+        occupied = self.grid.keys()
+        for x in range(self.width):
+            occupied_in_col = [pos for pos in occupied if pos[0] == x]
+            if occupied_in_col != []:
+                max_pos = min(occupied_in_col) 
+                self.highest_blocks[max_pos[0]] = max_pos[1] 
+            elif x in self.highest_blocks:
+                self.highest_blocks.pop(x) 
+        return None 
 
     def add_block(self, block):
         ''' Parameter: shape - type:Shape
@@ -168,7 +216,7 @@ class PlayBoard(Board):
             (x, y) coordinates as a dictionary key
         '''
         coords = block.get_coords()
-        self.grid[coords] = block 
+        self.grid[coords] = block
         return None
     
     def add_shape(self, shape):
@@ -180,11 +228,10 @@ class PlayBoard(Board):
 
             Hint: use the get_blocks method on Shape to
             get the list of blocks
-            
         '''
         for block in shape.get_blocks():
-           coords = block.get_coords()
-           self.grid[coords] = block 
+            self.add_block(block)
+        self.update_highest_blocks() 
         return None
 
     def delete_row(self, y):
@@ -196,12 +243,10 @@ class PlayBoard(Board):
             If you dont remember how to erase a graphics object
             from the screen, take a look at the Graphics Library
             handout
-            
         '''    
         for x in range(0, self.width):
             block = self.grid.pop((x,y))
             block.undraw()
-                
         return None 
 
     def is_row_complete(self, y):        
@@ -219,11 +264,11 @@ class PlayBoard(Board):
                 continue
             else:
                 return False
-
         return True 
     
     def move_down_rows(self, y_start):
         ''' Parameters: y_start - type:int                        
+            Return: None
 
             for each row from y_start to the top
                 for each column
@@ -231,29 +276,30 @@ class PlayBoard(Board):
                     if there is, remove it from the grid
                     and move the block object down on the screen
                     and then place it back in the grid in the new position
-
         '''
         # -1 because range function stops before hitting the
         #last element. I need it to go to grid row 0 (y = 0).
         for y in range(y_start, self.buffer_height-1, -1):
-            for x in range(0, self.width):
+            for x in range(self.width):
                 if (x, y) in self.grid:
                     block = self.grid.pop((x,y))
                     block.move(0, 1)
                     new_coords = block.get_coords()
                     self.grid[new_coords] = block
-
         return None 
     
     def remove_complete_rows(self):
-        ''' removes all the complete rows
+        ''' Parameters: None
+            Return: None
+
+            removes all the complete rows
             1. for each row, y, 
             2. check if the row is complete
                 if it is,
                     * delete the row
                     * add +1 to cleared_lines
                     * move all rows down starting at row y - 1
-                  
+                    * Update dictionary of highest blocks 
         '''
         cleared_lines = 0 
         for y in range(self.buffer_height, self.height):
@@ -262,10 +308,58 @@ class PlayBoard(Board):
                 self.total_lines += 1
                 cleared_lines += 1
                 self.move_down_rows(y-1)
-            else:
-                pass
-
+                self.update_highest_blocks()
         return cleared_lines  
+    
+    def lock_out_check(self, shape):
+        ''' Paramters: None
+            Return: None
+           
+           Checks to see if any blocks of the shape are in the play area
+           This is needed to determine if a shape satisfied the conditions
+           of a "lock out" game over condition.
+           Returns False if any blocks are still in the play area,
+           returns True otherwise.
+        '''
+
+        for block in shape.get_blocks():
+            coords = block.get_coords()
+            x,y = coords
+            #Grid rows 0 to 19 are the play area
+            if y < 0:
+                continue
+            else:
+                return False 
+        return True 
+
+    def game_over_check(self, new_shape, current_shape = None): 
+        ''' Parameters: new_shape - type: Shape
+                        current_shape - type: Shape or None
+
+            Return: type: Bool
+
+            Checks to see if either of the two game over conditions
+            have been met.
+            If either one is met then Returns True, otherwise 
+            returns False.
+        '''
+        if current_shape != None: 
+            lock_out = self.lock_out_check(current_shape)
+        else:
+            lock_out = False 
+        
+        #These are the coordinates on which new shapes spawn.
+        #shape_spawn_x_coord = int((self.width/2)-1)
+        #shape_spawn_y_coord = -1
+        #the shape.can_move function takes in delta x and delta y
+        #Hence the below function is given the coordinate of 0,0
+        #Basically to see if the new_shape can occupy it's spawn location
+        #or if it is occupied by another shape
+        block_out = new_shape.can_move(self, 0, 0)
+
+        if lock_out == True or block_out == False:
+            return True
+        return False
 
     def gameover_init(self):
         ''' Paramters: None
@@ -300,13 +394,6 @@ class PlayBoard(Board):
         self.gameover_draw()
         return None 
     
-    def total_line_clears(self):
-        ''' Parameters: None
-            Return: type:int - self.total_lines
-         
-            Returns the latest value of variable self.total_lines
-        '''
-        return self.total_lines
 
 ############################################################
 # SCOREBOARD CLASS
@@ -323,6 +410,11 @@ class ScoreBoard(Board):
                     level - type:int - keeps track of the level of the game
                     gravity - type:int - keeps track of the gravity of the game
                     score - type:int - keeps track of the score of the game
+                    combo - type:int - keeps track of the combo counter
+                    backtoback_count - type:int - keeps track of the back-to-back counter
+                                                  counter needs to reach 2 for back-to-back
+                                                  bonus to be enabled
+                    backtoback - type:Bool - keep tracks of status of back-to-back bonus
                     rect - type:gr.Rectangle - Holds the rectangle object which
                                                acts as a border and canvas.
                     lvl_text - type:gr.Text - Holds the level text object
@@ -330,7 +422,9 @@ class ScoreBoard(Board):
                     lvl_line - type:gr.Line - The line that is drawn underneath lvl_text 
                     scr_text - type:gr.Text - Holds the score text object 
                     scr_num - type:gr.Text - The graphics text object of the score number
-                    scr_line - type:gr.Line - The line that is drawn underneath scr_text 
+                    scr_line - type:gr.Line - The line that is drawn underneath scr_text
+                    combo_text - type:gr.Text - Holds the combo text object
+                    backtoback_text - type:gr.text - Holds the b2b text object
     '''             
 
     def __init__(self, win, width, height, block_size):
@@ -341,6 +435,9 @@ class ScoreBoard(Board):
         self.level = 1
         self.gravity = 1
         self.score = 0
+        self.combo = -1
+        self.backtoback_count = 0 
+        self.backtoback = False
 
         self.rect = None
         self.lvl_text = None
@@ -349,6 +446,8 @@ class ScoreBoard(Board):
         self.scr_text = None
         self.scr_num = None
         self.scr_line = None
+        self.combo_text = None
+        self.backtoback_text = None 
         Board.__init__(self, win, self.width, self.height, self.block_size, self.background)
         #Important: These must be done after parent class initialization
         self.gravity_up()
@@ -370,16 +469,6 @@ class ScoreBoard(Board):
         point2 = (canvas_w, canvas_h)
         self.rect = self.make_rect(origin, point2, 5, "black", "MediumAquamarine")
         return None
-
-    def init_text(self):
-        ''' Parameters: None
-            Return: None 
-            Initializes all the text that is displayed on the
-            scoreboard. 
-        '''
-        self.init_lvl_text() 
-        self.init_scr_text() 
-        return None 
 
     def init_scr_text(self):
         ''' Parameters: None
@@ -404,6 +493,38 @@ class ScoreBoard(Board):
         lvl_str = str(self.level)
         self.lvl_num = self.make_text((40.25,37.0), lvl_str, 11) 
         return None
+    
+    def init_combo_text(self):
+        '''Parameters: None
+           Return: None
+           Initializes text for displaying combo"
+        '''
+        #Got coordinates after trial and error
+        self.combo_text = self.make_text((227.0, 14.0), "Combo", 9)
+        self.combo_text.setTextColor('') 
+        return None 
+
+    def init_backtoback_text(self):
+        ''' Paramters: None
+            Return: None
+            Initializes text for displaying if back-to-back bonus is active
+        '''
+        #Got coordinates after trial and error
+        self.backtoback_text = self.make_text((277.0, 14.0), "B2B", 9)
+        self.backtoback_text.setTextColor('') 
+        return None
+
+    def init_text(self):
+        ''' Parameters: None
+            Return: None 
+            Initializes all the text that is displayed on the
+            scoreboard. 
+        '''
+        self.init_lvl_text() 
+        self.init_scr_text() 
+        self.init_combo_text()   
+        self.init_backtoback_text()
+        return None 
 
     def init_lines(self):
         ''' Parameters: None
@@ -439,8 +560,70 @@ class ScoreBoard(Board):
         self.lvl_line.draw(self.canvas)
         self.scr_text.draw(self.canvas)
         self.scr_num.draw(self.canvas)
-        self.scr_line.draw(self.canvas) 
+        self.scr_line.draw(self.canvas)
+        self.combo_text.draw(self.canvas)
+        self.backtoback_text.draw(self.canvas)
         return None 
+    
+    def set_combo(self): 
+        ''' Parameters: None
+            Return: None
+            Ticks the combo counter up by 1 when called
+            Displays the combo text and combo count on the scoreboard if 
+            the combo counter goes above 0, meaning combo bonus is active
+        '''
+        self.combo += 1
+        if self.combo > 0:
+            combo_num = str(self.combo)
+            self.combo_text.setText("Combo x"+combo_num)
+            self.combo_text.setTextColor("Black")
+        return None
+
+    def disable_combo(self):
+        ''' Parameters: None
+            Return: None
+
+            Resets all the variabls associated with tracking
+            and enabling the combo bonus back to default state,
+            disabling the combo bonus.
+        '''
+        self.combo = -1
+        self.combo_text.setTextColor('') 
+        return None
+
+    def set_backtoback(self):
+        ''' Parameters: None
+            Return None
+            
+            When backtoback bonus is set to False this function
+            ticks backtoback_counter up by 1.
+            When the counter equals 2, the backtoback variable is set 
+            to True and displays the "B2B" text on the scoreboard,
+            enabling back-t--back bonus.
+        ''' 
+        if self.backtoback == False and self.backtoback_count < 2:
+            self.backtoback_count += 1 
+        
+        #This is an if statement and not elif because I want it to 
+        #run everytime after the previous statement
+        if self.backtoback == False and self.backtoback_count >= 2:
+            self.backtoback_count = 0
+            self.backtoback = True
+            self.backtoback_text.setTextColor("Black")
+        return None
+
+    def disable_backtoback(self):  
+        ''' Parameters: None
+            Return: None
+
+            Resets all the variables associated with tracking and enabling
+            the back-to-back bonus to defualt state, disabling the the
+            back-to-back bonus.
+        '''
+        self.backtoback_count = 0
+        self.backtoback = False
+        self.backtoback_text.setTextColor('') 
+        return None
 
     def level_up(self, total_lines):
         ''' Paramters: type:int - Total lines cleared
@@ -476,15 +659,43 @@ class ScoreBoard(Board):
         #multiplied by 1000 to yield the time in ms
         self.gravity = ((0.8 - ((lvl-1.0)*0.007))**(lvl-1.0))
         return None 
+    
+    def softdrop_score_up(self): 
+        ''' Parameters: None
+            Return: None
+
+            Soft drops awards players 1 point per manual down movement
+            This function adds 1 to the score every time it is called.
+        '''
+        self.score += 1
+        score_str = str(int(self.score))
+        self.scr_num.setText(score_str)
+        return None
+    
+    def harddrop_score_up(self): 
+        ''' Parameters: None
+            Return: None
+
+            Hard drops awards players 2 points per down movement
+            This function adds 2 to the score every time it is called.
+        '''
+        self.score += 2
+        score_str = str(int(self.score))
+        self.scr_num.setText(score_str)
+        return None
 
     def score_up(self, cleared_lines):
         ''' Parameters: type:int - Number of cleared lines
             Return: None
+            If there lines are cleared:
             1. Calculates the score depending on the number of lines
                cleared in one go.
             2. Increments the total score by the amount of new points 
                earned.
             3. Draws the new score on the screen
+            4. Sets the combo (combo counts up by 1)
+            Otherwise if there are no line clears:
+            Disables combo
 
             Points per line cleared:
             1 line cleared: 100 * level
@@ -493,17 +704,26 @@ class ScoreBoard(Board):
             4 lines cleared: 800 * level
             n lines cleared: line_score * level
         '''
-        n = cleared_lines
         #Figured out this formula myself. The formula calculates 
         #the line score depending on the number of lines cleared.
         #The calculation needs to be done in floating point.
         #I know I could used a dictionary but this is more fun.
+        n = cleared_lines 
         if cleared_lines > 0:
             line_score = (50.0/3.0)*(n**3)+(-100.0)*(n**2)+(1150.0/3.0)*(n)+(-200.0)
+            if self.backtoback == True:
+                line_score = 1.5 * line_score
+           
+            #Combo only kicks in when combo count greater than zero
             points = line_score * self.level 
+            if self.combo > 0:
+                points += 50 * self.combo * self.level
             self.score += points
             score_str = str(int(self.score))
             self.scr_num.setText(score_str)
+            self.set_combo() 
+        else:
+            self.disable_combo() 
         return None
 
     def tspin_score_up(self, cleared_lines):
@@ -512,6 +732,8 @@ class ScoreBoard(Board):
             
             If lines are cleared with a t-spin, the points awarded are different
             from normal line clears. Points are awarded even if no lines are cleared.
+            The combo is set (combo counter counted up by 1) if there are any line 
+            clears. It is disabled otherwise.
 
             Points per full t-spin lines cleared:
             0 lines cleared: 400
@@ -523,13 +745,24 @@ class ScoreBoard(Board):
         #Maybe best to use float for the calculation
         #I know I could have used a dictionary but a little
         #math practive never hurt anyone.
-        n = cleared_lines
-        if cleared_lines >= 0: 
-            tspin_score = (400.0*n)+400.0
-            points = tspin_score * self.level
-            self.score += points 
-            score_str = str(int(self.score))
-            self.scr_num.setText(score_str) 
+        n = cleared_lines 
+        tspin_score = (400.0*n)+400.0
+        if self.backtoback == True:
+            tspin_score = 1.5 * tspin_score
+        
+        #Combo only kicks in when combo count greater than zero
+        points = tspin_score * self.level
+        if self.combo > 0:
+            points += 50 * self.combo * self.level 
+        
+        self.score += points 
+        score_str = str(int(self.score))
+        self.scr_num.setText(score_str)
+        
+        if cleared_lines > 0: 
+            self.set_combo() 
+        else:
+            self.disable_combo() 
         return None
 
     def mini_tspin_score_up(self, cleared_lines):
@@ -540,6 +773,9 @@ class ScoreBoard(Board):
             If lines are cleared with a mini t-spin that also
             awards points, which is different than normal line clears
             and full t-spin awards. Hence this function.
+            The combo is set (combo counter counts up by 1) if there 
+            are any line clears. Combo is disabled if there are zero
+            lines cleared.
 
             Points per mini t-spin lines cleared:
             0 lines: 100
@@ -551,12 +787,23 @@ class ScoreBoard(Board):
         #I know a dictionary works in this case
         #but wanted to do a little math practice 
         n = cleared_lines
-        if cleared_lines >= 0:
-            mini_score = ((50.0)*(n**2))+((50.0)*(n))+(100.0)
-            points = mini_score * self.level
-            self.score += points
-            score_str = str(int(self.score))
-            self.scr_num.setText(score_str)
+        mini_score = ((50.0)*(n**2))+((50.0)*(n))+(100.0)
+        if self.backtoback == True:
+            mini_score = 1.5 * mini_score
+        
+        #Combo only kicks in when combo count greater than zero
+        points = mini_score * self.level
+        if self.combo > 0:
+            points += 50 * self.combo * self.level
+        
+        self.score += points 
+        score_str = str(int(self.score))
+        self.scr_num.setText(score_str)
+        
+        if cleared_lines > 0:
+            self.set_combo() 
+        else:
+            self.disable_combo() 
         return None
 
     def update(self, cleared_lines, total_lines):
@@ -566,9 +813,18 @@ class ScoreBoard(Board):
                                     - Returns the new gravity
                                   If there is no level change then:
                                     - Returns False
+            
             Updates the score and level based on cleared lines in one go and
-            total cleared lines.
+            total cleared lines. Also tracks the back-to-back bonus. 4 line
+            clears keep the back-to-back bonus alive, clears of less than 4 lines
+            results in the back-to-back bonus being disabled. Also keeps track
+            of the back-to-back bonus. 
         '''
+        if cleared_lines >= 4:
+            self.set_backtoback()
+        elif cleared_lines >= 1 and cleared_lines <= 3:
+            self.disable_backtoback() 
+
         self.score_up(cleared_lines)
         return self.level_up(total_lines)
 
@@ -578,8 +834,11 @@ class ScoreBoard(Board):
                        type: bool - Full t-spin: true, mini t-spin: false
 
             Updates the score and level based on cleared lines and total cleared
-            lines if a t-spin is performed.
+            lines if a t-spin is performed. Every t-spin keeps back-to-back bonus 
+            alive, hence the call to the set_backtoback() function. T-spins
+            keep back-to-back bonus alive.
         '''
+        self.set_backtoback()
         if full == False:
             self.mini_tspin_score_up(cleared_lines)
             return self.level_up(total_lines)
@@ -598,7 +857,7 @@ class PreviewBoard(Board):
         Attributes: width - type:int - width of the board in squares
                     height - type:int - height of the board in squares
                     block_size - type:int - size of tetris blocks in pixels
-                    baclground - type:str - the colour of the background of the canvas 
+                    background - type:str - the colour of the background of the canvas 
                                             frame 
                     hld_shape - type:None/Shape -  keeps track of the hold piece 
                     prv_list - type:list - keeps track of the preview of next three 
@@ -682,17 +941,16 @@ class PreviewBoard(Board):
             The shapes are initialized with positions, which are the 
             positions the shapes will be displayed at on the Preview Board. 
         '''
-        shape_col = 'MediumAquamarine'
         #Got the coordinates after trial and error
         prv_x = 14.65 
         prv_y = 3.75 
+        
         for i in range(3):
             prv_center = gr.Point(prv_x, prv_y) 
-            new_shape = shape_list[i](prv_center, shape_col, 10)
+            new_shape = shape_list[i](center=prv_center, block_size=10)
             self.prv_list.append(new_shape)
             #Got 5.49 after trial and error
             prv_x += 5.49 
-
         return None 
 
     def init_hold(self, hold_shape = None):
@@ -707,15 +965,14 @@ class PreviewBoard(Board):
             be initialized with a new position. This position is where  the shape
             will be displayed on the Preview Board. 
        '''
-        shape_col = 'MediumAquamarine'
         #Got the coordinates after trial and error
         hld_x = 4.65
         hld_y = 3.75 #3.25 #3 #2.75
         hld_center = gr.Point(hld_x, hld_y) 
+
         if hold_shape != None:
             shape_type = hold_shape.__class__ 
-            self.hld_shape = shape_type(hld_center, shape_col, 10) 
-        
+            self.hld_shape = shape_type(center=hld_center, block_size=10) 
         return None
 
     def init_static(self):
@@ -729,21 +986,6 @@ class PreviewBoard(Board):
         self.init_lines()
         return None
 
-    def undraw_preview(self):
-        ''' Parameters: None
-            Return: None
-            Undraws the currentl preview shapes if they exist
-            and are displayed.
-        '''
-        if self.prv_list != []:
-            list_len = len(self.prv_list)
-            for i in range(list_len):
-                if self.prv_list[i]:
-                    self.prv_list[i].undraw()
-            self.prv_list = []
-
-        return None
-    
     def draw_static(self):
         ''' Parameters: None
             Return: None
@@ -757,6 +999,20 @@ class PreviewBoard(Board):
         self.prv_line.draw(self.canvas)
         return None
 
+    def undraw_preview(self):
+        ''' Parameters: None
+            Return: None
+            Undraws the currently preview shapes if they exist
+            and are displayed.
+        '''
+        if self.prv_list != []:
+            list_len = len(self.prv_list)
+            for i in range(list_len):
+                if self.prv_list[i]:
+                    self.prv_list[i].undraw()
+            self.prv_list = []
+        return None
+    
     def draw_preview(self, shape_list):
         ''' Paramters: type: list - A list of shapes to be drawn
             Return: None
@@ -769,7 +1025,6 @@ class PreviewBoard(Board):
         
         for i in range(3):
             self.prv_list[i].draw(self.canvas)
-        
         return None
 
     def draw_hold(self, hold_shape = None):
@@ -783,9 +1038,12 @@ class PreviewBoard(Board):
             self.hld_shape.undraw()
          
         self.init_hold(hold_shape)
+
         if self.hld_shape != None:
             self.hld_shape.draw(self.canvas)
-
         return None
 
 
+############################################################
+# END OF FILE                                              #
+############################################################
